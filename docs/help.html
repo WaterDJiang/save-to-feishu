@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>使用帮助 - Save to Feishu</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #1d1d1f;
+            background: #f5f5f7;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #1d1d1f;
+        }
+        .subtitle {
+            font-size: 16px;
+            color: #86868b;
+            margin-bottom: 32px;
+        }
+        h2 {
+            font-size: 22px;
+            font-weight: 600;
+            margin-top: 36px;
+            margin-bottom: 16px;
+            color: #1d1d1f;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 24px;
+            margin-bottom: 12px;
+            color: #1d1d1f;
+        }
+        p {
+            margin-bottom: 16px;
+            color: #333;
+            line-height: 1.8;
+        }
+        ul, ol {
+            margin-bottom: 16px;
+            padding-left: 24px;
+        }
+        li {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .step {
+            background: #f9f9fb;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border-left: 4px solid #0071e3;
+        }
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: #0071e3;
+            color: white;
+            border-radius: 50%;
+            font-weight: 600;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        .tip {
+            background: #f0f9ff;
+            padding: 16px 20px;
+            border-radius: 8px;
+            border-left: 4px solid #34c759;
+            margin: 20px 0;
+        }
+        .tip-title {
+            font-weight: 600;
+            color: #34c759;
+            margin-bottom: 8px;
+        }
+        .warning {
+            background: #fff5f5;
+            padding: 16px 20px;
+            border-radius: 8px;
+            border-left: 4px solid #ff3b30;
+            margin: 20px 0;
+        }
+        .warning-title {
+            font-weight: 600;
+            color: #ff3b30;
+            margin-bottom: 8px;
+        }
+        code {
+            background: #f5f5f7;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 14px;
+            color: #1d1d1f;
+        }
+        .screenshot-placeholder {
+            background: #f5f5f7;
+            border: 2px dashed #d1d1d6;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            color: #86868b;
+            margin: 20px 0;
+        }
+        a {
+            color: #0071e3;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .faq-item {
+            margin-bottom: 24px;
+        }
+        .faq-question {
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+        .faq-answer {
+            color: #666;
+            padding-left: 16px;
+            border-left: 3px solid #e5e5ea;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e5ea;
+            color: #86868b;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Save to Feishu 使用帮助</h1>
+        <p class="subtitle">一键保存网页内容到飞书多维表格</p>
+
+        <h2>📖 快速开始</h2>
+        
+        <div class="step">
+            <h3><span class="step-number">1</span>获取飞书应用凭证</h3>
+            <ol>
+                <li>访问 <a href="https://open.feishu.cn/app" target="_blank">飞书开放平台</a></li>
+                <li>登录后点击"创建企业自建应用"</li>
+                <li>填写应用名称（如"Save to Feishu"），选择应用类型</li>
+                <li>创建完成后，在"凭证与基础信息"中获取：
+                    <ul>
+                        <li><strong>App ID</strong></li>
+                        <li><strong>App Secret</strong></li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">2</span>配置应用权限</h3>
+            <ol>
+                <li>在应用后台，点击"权限管理"</li>
+                <li>添加以下权限：
+                    <ul>
+                        <li><code>bitable:app</code> - 访问多维表格</li>
+                        <li><code>bitable:record</code> - 操作记录</li>
+                    </ul>
+                </li>
+                <li>点击"申请权限"并等待审批（通常自动通过）</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">3</span>创建多维表格</h3>
+            <ol>
+                <li>在飞书中创建一个新的多维表格</li>
+                <li>添加需要的字段，例如：
+                    <ul>
+                        <li>标题（文本）</li>
+                        <li>链接（文本/链接）</li>
+                        <li>正文（文本）</li>
+                        <li>图片（附件）</li>
+                        <li>保存时间（日期）</li>
+                    </ul>
+                </li>
+                <li>点击表格右上角的"分享"按钮</li>
+                <li>开启"分享到互联网"或分享给应用</li>
+                <li>复制表格链接，提取 <strong>Table ID</strong>（链接中的字符串）</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">4</span>配置扩展</h3>
+            <ol>
+                <li>点击扩展图标，选择"设置"</li>
+                <li>填入 App ID 和 App Secret</li>
+                <li>点击"添加表格"，输入表格名称和 Table ID</li>
+                <li>配置字段映射（将网页内容与表格字段对应）</li>
+                <li>保存配置</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">5</span>开始使用</h3>
+            <ol>
+                <li>打开想要保存的网页</li>
+                <li>点击扩展图标</li>
+                <li>选择目标表格</li>
+                <li>预览内容后点击"保存到飞书"</li>
+            </ol>
+        </div>
+
+        <h2>💡 使用技巧</h2>
+
+        <div class="tip">
+            <div class="tip-title">💡 提示：表格排序</div>
+            <p>在表格列表页面，可以使用上下箭头调整表格顺序，让常用的表格排在前面。</p>
+        </div>
+
+        <div class="tip">
+            <div class="tip-title">💡 提示：字段类型</div>
+            <p>飞书多维表格支持多种字段类型，建议：标题用"文本"，链接用"链接"或"文本"，正文用"多行文本"，图片用"附件"。</p>
+        </div>
+
+        <div class="tip">
+            <div class="tip-title">💡 提示：批量保存</div>
+            <p>虽然扩展不支持批量保存多个网页，但您可以快速连续保存多个页面，所有内容都会按顺序添加到表格中。</p>
+        </div>
+
+        <h2>⚠️ 常见问题</h2>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: 保存失败，提示"Forbidden"或权限错误？</div>
+            <div class="faq-answer">
+                <p>请检查：</p>
+                <ul>
+                    <li>应用是否已申请 <code>bitable:app</code> 和 <code>bitable:record</code> 权限</li>
+                    <li>表格是否已分享给应用（开启"允许应用编辑"）</li>
+                    <li>App ID 和 App Secret 是否填写正确</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: 保存失败，提示"FieldNameNotFound"？</div>
+            <div class="faq-answer">
+                <p>字段名称不匹配。请重新获取表格字段，确保配置的字段名称与飞书表格中的字段完全一致（包括大小写）。</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: 保存失败，提示"URLFieldConvFail"？</div>
+            <div class="faq-answer">
+                <p>链接字段格式错误。如果飞书表格的链接字段要求特定格式，请确保网页 URL 是完整的 http/https 链接。</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: 提取的内容不完整？</div>
+            <div class="faq-answer">
+                <p>某些网页使用动态加载或特殊结构，可能导致内容提取不完整。尝试刷新页面后再次保存。</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: 如何删除已保存的配置？</div>
+            <div class="faq-answer">
+                <p>在扩展设置页面，点击表格卡片上的"删除"按钮即可删除该表格配置。如需清除所有数据，可以卸载扩展后重新安装。</p>
+            </div>
+        </div>
+
+        <h2>🔒 隐私与安全</h2>
+
+        <div class="warning">
+            <div class="warning-title">⚠️ 安全提醒</div>
+            <ul>
+                <li>您的 App ID 和 App Secret 仅存储在本地浏览器中</li>
+                <li>所有数据直接发送到您的飞书表格，不经过第三方服务器</li>
+                <li>建议不要将敏感凭证分享给他人</li>
+                <li>定期检查飞书应用权限设置</li>
+            </ul>
+        </div>
+
+        <h2>📞 获取支持</h2>
+
+        <p>如果您在使用过程中遇到问题，或有功能建议，欢迎联系我们：</p>
+        <ul>
+            <li>GitHub Issues：<a href="https://github.com/WaterDJiang/save-to-feishu/issues" target="_blank">提交问题</a></li>
+            <li>项目主页：<a href="https://github.com/WaterDJiang/save-to-feishu" target="_blank">GitHub 项目</a></li>
+        </ul>
+
+        <div class="footer">
+            <p>© 2026 Save to Feishu. 保留所有权利。</p>
+            <p><a href="privacy-policy.html">隐私政策</a></p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,217 @@
+/**
+ * 字段级帮助组件样式
+ */
+
+/* 帮助触发按钮 */
+.field-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0;
+  background: linear-gradient(135deg, #3370ff 0%, #2851e3 100%);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  vertical-align: middle;
+}
+
+.field-help-trigger:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(51, 112, 255, 0.4);
+}
+
+/* 帮助弹窗遮罩 */
+.field-help-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+/* 帮助弹窗内容 */
+.field-help-popup {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 450px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: field-help-slide-in 0.25s ease;
+}
+
+@keyframes field-help-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-15px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 弹窗头部 */
+.field-help-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.field-help-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.field-help-close {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.field-help-close:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+/* 弹窗内容区 */
+.field-help-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #4b5563;
+}
+
+.field-help-body p {
+  margin: 0 0 12px 0;
+}
+
+.field-help-body p:last-child {
+  margin-bottom: 0;
+}
+
+.field-help-body ol,
+.field-help-body ul {
+  margin: 0 0 12px 0;
+  padding-left: 20px;
+}
+
+.field-help-body li {
+  margin-bottom: 6px;
+}
+
+.field-help-body li:last-child {
+  margin-bottom: 0;
+}
+
+.field-help-body a {
+  color: #3370ff;
+  text-decoration: none;
+}
+
+.field-help-body a:hover {
+  text-decoration: underline;
+}
+
+.field-help-body strong {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+/* 代码块 */
+.field-help-code {
+  display: block;
+  background: #1f2937;
+  color: #e5e7eb;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  margin: 12px 0;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.field-help-code strong {
+  color: #60a5fa;
+}
+
+.field-help-body code {
+  background: #e5e7eb;
+  color: #1f2937;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+/* 提示条 - 基础样式 */
+.field-help-alert {
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+/* 提示条 - 信息（蓝色） */
+.field-help-tip {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+}
+
+/* 提示条 - 警告（黄色） */
+.field-help-warning {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+/* 提示条 - 成功（绿色） */
+.field-help-success {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #166534;
+}
+
+/* 提示条 - 错误（红色） */
+.field-help-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+/* 表单标签中的帮助按钮布局 */
+.form-label-with-help {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
