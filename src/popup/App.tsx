@@ -17,6 +17,7 @@ import {
   FolderOpen,
   Link2,
   Clock,
+  ExternalLink,
 } from 'lucide-react';
 import type { ExtractedPageContent, TableConfig, SaveResult } from '@/types';
 import { getTableConfigs, saveTableConfigs } from '@/services/storageService';
@@ -49,9 +50,14 @@ function TableListItem({
     <div 
       className="sf-list-item" 
       style={{ animationDelay: `${index * 40}ms` }}
+      role="listitem"
     >
-      <button className="sf-list-content" onClick={onSelect}>
-        <div className="sf-list-icon">
+      <button 
+        className="sf-list-content" 
+        onClick={onSelect}
+        aria-label={`选择表格 ${table.name}，包含 ${table.fieldMappings?.length || 0} 个字段`}
+      >
+        <div className="sf-list-icon" aria-hidden="true">
           <Database size={16} strokeWidth={1.5} />
         </div>
         <div className="sf-list-info">
@@ -60,28 +66,55 @@ function TableListItem({
             {table.fieldMappings?.length || 0} 个字段
           </span>
         </div>
-        <ChevronRight size={16} className="sf-list-chevron" strokeWidth={1.5} />
+        <ChevronRight size={16} className="sf-list-chevron" strokeWidth={1.5} aria-hidden="true" />
       </button>
-      <div className="sf-list-actions">
+      <div className="sf-list-actions" role="group" aria-label="表格排序操作">
         <button
           className="sf-action-btn"
           onClick={onMoveUp}
           disabled={index === 0}
           title="上移"
+          aria-label={`上移 ${table.name}`}
+          aria-disabled={index === 0}
         >
-          <ChevronUp size={14} strokeWidth={1.5} />
+          <ChevronUp size={14} strokeWidth={1.5} aria-hidden="true" />
         </button>
         <button
           className="sf-action-btn"
           onClick={onMoveDown}
           disabled={index === total - 1}
           title="下移"
+          aria-label={`下移 ${table.name}`}
+          aria-disabled={index === total - 1}
         >
-          <ChevronDown size={14} strokeWidth={1.5} />
+          <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" />
         </button>
       </div>
     </div>
   );
+}
+
+/**
+ * 安全获取 URL 的 hostname
+ * @param url - URL 字符串
+ * @returns hostname 或原始 URL
+ */
+function getHostname(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
+function getTableUrl(table: TableConfig): string {
+  if (table?.tableUrl && table.tableUrl.trim()) {
+    return table.tableUrl.trim();
+  }
+  if (table?.appToken && table?.tableId) {
+    return `https://feishu.cn/base/${table.appToken}?table=${table.tableId}`;
+  }
+  return '';
 }
 
 /**
@@ -103,7 +136,7 @@ function ContentPreview({ content }: { content: ExtractedPageContent }) {
         <div className="sf-preview-meta">
           <div className="sf-meta-item">
             <Link2 size={12} strokeWidth={1.5} />
-            <span className="sf-truncate">{new URL(content.url).hostname}</span>
+            <span className="sf-truncate">{getHostname(content.url)}</span>
           </div>
           {content.mainImage && (
             <div className="sf-meta-badge">
@@ -122,7 +155,14 @@ function ContentPreview({ content }: { content: ExtractedPageContent }) {
  */
 function SaveResultAlert({ result }: { result: SaveResult }) {
   const isSuccess = result.success;
-  
+  const tableUrl = result.tableUrl;
+
+  const handleOpenTable = () => {
+    if (tableUrl) {
+      chrome.tabs.create({ url: tableUrl });
+    }
+  };
+
   return (
     <div className={`sf-alert ${isSuccess ? 'sf-alert-success' : 'sf-alert-error'}`}>
       <div className="sf-alert-icon">
@@ -138,6 +178,12 @@ function SaveResultAlert({ result }: { result: SaveResult }) {
         </span>
         {!isSuccess && result.error && (
           <span className="sf-alert-message">{result.error}</span>
+        )}
+        {isSuccess && tableUrl && (
+          <button className="sf-alert-action" onClick={handleOpenTable}>
+            打开多维表格
+            <ChevronRight size={14} strokeWidth={1.5} />
+          </button>
         )}
       </div>
     </div>
@@ -374,6 +420,8 @@ function PopupApp() {
    */
   const renderSavePage = () => {
     if (!selectedTable || !content) return null;
+    const tableUrl = getTableUrl(selectedTable);
+    const hasTableUrl = Boolean(tableUrl);
 
     return (
       <div className="sf-save-page">
@@ -383,15 +431,37 @@ function PopupApp() {
         </button>
 
         <div className="sf-save-content">
-          {/* 选中的表格信息 */}
-          <div className="sf-target-card">
+          {/* 选中的表格信息 - 可点击跳转 */}
+          <div
+            className="sf-target-card sf-target-card-clickable"
+            onClick={() => {
+              console.log('[Popup] 点击表格卡片', selectedTable);
+              console.log('[Popup] tableUrl:', selectedTable?.tableUrl);
+              console.log('[Popup] appToken:', selectedTable?.appToken);
+              console.log('[Popup] tableId:', selectedTable?.tableId);
+
+              let tableUrl = getTableUrl(selectedTable);
+
+              console.log('[Popup] 最终使用的链接:', tableUrl);
+
+              if (tableUrl) {
+                // 在 popup 中使用 window.open 更可靠
+                window.open(tableUrl, '_blank');
+              } else {
+                console.error('[Popup] 无法生成表格链接');
+                alert('无法打开表格：缺少必要的表格信息 (tableUrl 或 appToken + tableId)');
+              }
+            }}
+            title="点击打开多维表格"
+          >
             <div className="sf-target-icon">
               <Database size={20} strokeWidth={1.5} />
             </div>
             <div className="sf-target-info">
-              <span className="sf-target-label">保存到</span>
+              <span className="sf-target-label">保存到 · 点击打开表格</span>
               <span className="sf-target-name">{selectedTable.name}</span>
             </div>
+            <ExternalLink size={16} strokeWidth={1.5} className="sf-target-link-icon" />
           </div>
 
           {/* 页面内容预览 */}
@@ -403,6 +473,19 @@ function PopupApp() {
 
         {/* 保存按钮 */}
         <div className="sf-save-actions">
+          <button
+            onClick={() => {
+              if (tableUrl) {
+                window.open(tableUrl, '_blank');
+              }
+            }}
+            disabled={!hasTableUrl}
+            className="sf-btn sf-btn-secondary sf-btn-large"
+            title={hasTableUrl ? '打开多维表格' : '请先在设置页配置表格链接'}
+          >
+            <ExternalLink size={18} strokeWidth={1.5} />
+            <span>一键打开飞书表格</span>
+          </button>
           <button
             onClick={handleSave}
             disabled={isSaving}

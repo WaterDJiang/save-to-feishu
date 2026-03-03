@@ -201,7 +201,7 @@ class FloatingPanel {
   }
 
   /**
-   * 创建 SVG 图标
+   * 创建 SVG 图标（字符串版本）
    */
   private createSVGIcon(type: string, size = 16): string {
     const icons: Record<string, string> = {
@@ -224,6 +224,17 @@ class FloatingPanel {
       clock: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
     };
     return icons[type] || '';
+  }
+
+  /**
+   * 创建 SVG 图标元素（DOM 版本）
+   */
+  private createSVGIconElement(type: string, size = 16): Element {
+    const iconString = this.createSVGIcon(type, size);
+    const template = document.createElement('template');
+    template.innerHTML = iconString.trim();
+    const element = template.content.firstChild;
+    return (element as Element) || document.createElement('span');
   }
 
   /**
@@ -438,12 +449,36 @@ class FloatingPanel {
   }
 
   /**
+   * 安全获取 URL 的 hostname
+   * @param url - URL 字符串
+   * @returns hostname 或原始 URL
+   */
+  private getHostname(url: string): string {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return url;
+    }
+  }
+
+  private getTableUrl(table: TableConfig): string {
+    if (table?.tableUrl && table.tableUrl.trim()) {
+      return table.tableUrl.trim();
+    }
+    if (table?.appToken && table?.tableId) {
+      return `https://feishu.cn/base/${table.appToken}?table=${table.tableId}`;
+    }
+    return '';
+  }
+
+  /**
    * 渲染保存页面
    */
   private renderSavePage(): string {
     if (!this.content || !this.selectedTable) return '';
 
-    const hostname = new URL(this.content.url).hostname;
+    const hostname = this.getHostname(this.content.url);
+    const tableUrl = this.getTableUrl(this.selectedTable);
 
     return `
       <div class="sf-save-page">
@@ -488,6 +523,10 @@ class FloatingPanel {
         </div>
 
         <div class="sf-save-actions">
+          <button class="sf-btn sf-btn-secondary sf-btn-large" id="sf-btn-open-table" ${tableUrl ? '' : 'disabled'} title="${tableUrl ? '打开多维表格' : '请先在设置页配置表格链接'}">
+            ${this.createSVGIcon('link', 18)}
+            <span>一键打开飞书表格</span>
+          </button>
           <button class="sf-btn sf-btn-primary sf-btn-large" id="sf-btn-save">
             ${this.createSVGIcon('save', 18)}
             <span>保存到飞书</span>
@@ -541,6 +580,15 @@ class FloatingPanel {
       this.handleSave();
     });
 
+    this.panel.querySelector('#sf-btn-open-table')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!this.selectedTable) return;
+      const tableUrl = this.getTableUrl(this.selectedTable);
+      if (tableUrl) {
+        window.open(tableUrl, '_blank');
+      }
+    });
+
     // 表格选择
     this.panel.querySelectorAll('[data-action="select"]').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -584,7 +632,13 @@ class FloatingPanel {
     const saveBtn = this.panel?.querySelector('#sf-btn-save');
     if (saveBtn) {
       saveBtn.setAttribute('disabled', 'true');
-      saveBtn.innerHTML = `${this.createSVGIcon('loader', 18)}<span>保存中...</span>`;
+      // 使用 DOM API 而非 innerHTML
+      saveBtn.textContent = '';
+      const loaderIcon = this.createSVGIconElement('loader', 18);
+      const span = document.createElement('span');
+      span.textContent = '保存中...';
+      saveBtn.appendChild(loaderIcon);
+      saveBtn.appendChild(span);
     }
 
     try {
@@ -702,16 +756,51 @@ if (document.readyState === 'complete') {
 
 /**
  * 监听 DOM 变化，如果标题发生变化，重新提取内容
+ * 使用单例模式避免重复创建 observer
  */
+let titleObserver: MutationObserver | null = null;
 let lastTitle = document.title;
-const observer = new MutationObserver(() => {
-  if (document.title !== lastTitle) {
-    lastTitle = document.title;
-    sendExtractedContent();
+
+/**
+ * 清理标题监听器
+ */
+function cleanupTitleObserver() {
+  if (titleObserver) {
+    titleObserver.disconnect();
+    titleObserver = null;
+  }
+}
+
+/**
+ * 初始化标题监听器
+ */
+function initTitleObserver() {
+  if (titleObserver) return; // 避免重复创建
+  
+  const titleElement = document.querySelector('title');
+  if (!titleElement) return;
+
+  titleObserver = new MutationObserver(() => {
+    if (document.title !== lastTitle) {
+      lastTitle = document.title;
+      sendExtractedContent();
+    }
+  });
+
+  titleObserver.observe(titleElement, { childList: true });
+}
+
+// 初始化监听
+initTitleObserver();
+
+// 页面卸载时清理资源
+window.addEventListener('beforeunload', cleanupTitleObserver);
+
+// 页面隐藏时也清理（适用于 SPA 路由切换）
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    cleanupTitleObserver();
+  } else {
+    initTitleObserver();
   }
 });
-
-const titleElement = document.querySelector('title');
-if (titleElement) {
-  observer.observe(titleElement, { childList: true });
-}

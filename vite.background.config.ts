@@ -11,6 +11,7 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  publicDir: false,
   build: {
     outDir: 'dist/background',
     emptyOutDir: true,

@@ -4,6 +4,60 @@ import { getFeishuCredentials } from './storageService';
 const LARK_API_BASE = 'https://open.feishu.cn/open-apis';
 
 /**
+ * 飞书 API 响应基础结构
+ */
+interface FeishuApiResponse<T = unknown> {
+  code: number;
+  msg: string;
+  data?: T;
+}
+
+/**
+ * 飞书记录数据
+ */
+interface FeishuRecordData {
+  record?: {
+    record_id?: string;
+    id?: string;
+  };
+}
+
+/**
+ * 飞书表格列表项
+ */
+interface FeishuTableItem {
+  table_id: string;
+  name: string;
+}
+
+/**
+ * 飞书字段项
+ */
+interface FeishuFieldItem {
+  field_id: string;
+  field_name: string;
+  name?: string;
+  title?: string;
+  type: number;
+  property?: Record<string, unknown>;
+}
+
+/**
+ * 安全解析 JSON 字符串
+ * @param text - JSON 字符串
+ * @param defaultValue - 解析失败时的默认值
+ * @returns 解析后的对象或默认值
+ */
+function safeJsonParse<T>(text: string, defaultValue: T): T {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    console.error('[Feishu] JSON 解析失败:', error, '原始文本:', text.substring(0, 200));
+    return defaultValue;
+  }
+}
+
+/**
  * 缓存的 Tenant Token
  */
 let cachedTenantToken: string | null = null;
@@ -53,10 +107,13 @@ export async function getTenantToken(forceRefresh: boolean = false): Promise<str
     
     cachedTenantToken = data.tenant_access_token || null;
     
-    const expireSec = Number(data.expire || data.expires_in || 0);
-    cachedTenantTokenExpireAt = expireSec ? now + expireSec * 1000 : now + 30 * 60 * 1000;
+    // 优先使用 expire 字段，其次使用 expires_in，默认 2 小时
+    const expireSec = Number(data.expire || data.expires_in || 7200);
+    // 提前 5 分钟过期，避免边界情况
+    const bufferSec = 300;
+    cachedTenantTokenExpireAt = now + (expireSec - bufferSec) * 1000;
     
-    console.log('[Feishu] Token 获取成功，有效期至:', new Date(cachedTenantTokenExpireAt).toLocaleString());
+    console.log('[Feishu] Token 获取成功，原始过期时间:', expireSec, '秒，实际过期时间:', new Date(cachedTenantTokenExpireAt).toLocaleString());
     return cachedTenantToken;
   } catch (error) {
     console.error('[Feishu] Token 获取异常:', error);
@@ -115,10 +172,10 @@ export async function listTables(appToken: string): Promise<FeishuTable[]> {
     if (!response.ok) return [];
     
     const data = await response.json();
-    const items = (data.data?.items || data.data?.tables || []) as any[];
+    const items = (data.data?.items || data.data?.tables || []) as FeishuTableItem[];
     
-    return items.map((item: any) => ({
-      id: item.table_id || item.id,
+    return items.map((item) => ({
+      id: item.table_id || (item as any).id,
       name: item.name,
     }));
   } catch {
@@ -151,7 +208,7 @@ export async function getTableFields(appToken: string, tableId: string): Promise
     const data = await response.json();
     console.log('[Feishu] 字段 API 响应数据:', data);
     
-    const items = (data.data?.items || []) as any[];
+    const items = (data.data?.items || []) as FeishuFieldItem[];
     console.log('[Feishu] 解析出的字段列表:', items);
     
     const mapType = (t: number | string): FeishuField['type'] => {
@@ -188,9 +245,9 @@ export async function getTableFields(appToken: string, tableId: string): Promise
       return 'text';
     };
     
-    const fields = items.map((f: any) => {
-      const fieldId = f.field_id || f.id;
-      const fieldName = (typeof f.name === 'string' && f.name.trim()) ? f.name.trim() : (f.field_name || f.title || `Field ${f.field_id || f.id}`);
+    const fields = items.map((f) => {
+      const fieldId = f.field_id || (f as any).id;
+      const fieldName = (typeof f.name === 'string' && f.name.trim()) ? f.name.trim() : (f.field_name || (f as any).title || `Field ${f.field_id || (f as any).id}`);
       const fieldType = mapType(f.type);
       
       console.log(`[Feishu] 解析字段: ${fieldName} (ID: ${fieldId}, 类型: ${f.type} -> ${fieldType})`);
@@ -440,7 +497,7 @@ export async function saveToFeishu(
     const responseText = await response.text();
     console.log('[Feishu] API 响应原始文本:', responseText);
     
-    const data = JSON.parse(responseText);
+    const data = safeJsonParse<FeishuApiResponse<FeishuRecordData>>(responseText, { code: -1, msg: '响应解析失败' });
     console.log('[Feishu] API 响应数据:', data);
     
     if (data.code !== 0) {
@@ -473,14 +530,24 @@ export async function saveToFeishu(
         });
         
         const retryText = await retryResponse.text();
-        const retryData = JSON.parse(retryText);
+        const retryData = safeJsonParse<FeishuApiResponse<FeishuRecordData>>(retryText, { code: -1, msg: '重试响应解析失败' });
         
         if (retryData.code === 0) {
           const recordId = retryData.data?.record?.record_id || retryData.data?.record?.id;
           console.log('[Feishu] 重试保存成功，记录 ID:', recordId);
-          return { success: true, recordId };
+          // 优先使用存储的完整链接，兼容旧数据则使用 appToken 和 tableId 构建
+          const tableUrl = tableConfig.tableUrl || 
+            (tableConfig.appToken && tableConfig.tableId
+              ? `https://feishu.cn/base/${tableConfig.appToken}?table=${tableConfig.tableId}`
+              : '');
+          console.log('[Feishu] 表格 URL:', tableUrl);
+          return { success: true, recordId, tableUrl };
         } else {
           console.error('[Feishu] 重试仍然失败:', retryData);
+          return {
+            success: false,
+            error: retryData.msg || '保存失败',
+          };
         }
       }
       
@@ -513,10 +580,18 @@ export async function saveToFeishu(
     
     const recordId = data.data?.record?.record_id || data.data?.record?.id;
     console.log('[Feishu] 保存成功，记录 ID:', recordId);
-    
+
+    // 优先使用存储的完整链接，兼容旧数据则使用 appToken 和 tableId 构建
+    const tableUrl = tableConfig.tableUrl || 
+      (tableConfig.appToken && tableConfig.tableId
+        ? `https://feishu.cn/base/${tableConfig.appToken}?table=${tableConfig.tableId}`
+        : '');
+    console.log('[Feishu] 表格 URL:', tableUrl);
+
     return {
       success: true,
       recordId,
+      tableUrl,
     };
   } catch (error) {
     console.error('[Feishu] 保存过程异常:', error);

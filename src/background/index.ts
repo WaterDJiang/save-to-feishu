@@ -23,19 +23,37 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
   // 处理浮窗发来的消息
   else if (message.action === 'getTableConfigs') {
-    getTableConfigs().then(tables => {
-      sendResponse({ tables });
-    });
+    getTableConfigs()
+      .then(tables => {
+        sendResponse({ tables });
+      })
+      .catch(error => {
+        console.error('获取表格配置失败:', error);
+        sendResponse({ tables: [], error: error instanceof Error ? error.message : '获取失败' });
+      });
     return true; // 保持消息通道开放
   } else if (message.action === 'saveTableConfigs') {
-    saveTableConfigs(message.tables).then(() => {
-      sendResponse({ success: true });
-    });
+    saveTableConfigs(message.tables)
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch(error => {
+        console.error('保存表格配置失败:', error);
+        sendResponse({ success: false, error: error instanceof Error ? error.message : '保存失败' });
+      });
     return true;
   } else if (message.action === 'saveToFeishu') {
-    feishuSaveToFeishu(message.table, message.content).then(result => {
-      sendResponse(result);
-    });
+    feishuSaveToFeishu(message.table, message.content)
+      .then(result => {
+        sendResponse(result);
+      })
+      .catch(error => {
+        console.error('保存到飞书失败:', error);
+        sendResponse({ 
+          success: false, 
+          error: error instanceof Error ? error.message : '保存失败' 
+        });
+      });
     return true;
   }
   return true;

@@ -20,7 +20,7 @@
   background: white;
   border-radius: 12px;
   width: 100%;
-  max-width: 700px;
+  max-width: 800px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -82,7 +82,7 @@
 }
 
 .help-section {
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .help-section:last-child {
@@ -90,25 +90,25 @@
 }
 
 .help-section h3 {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: #1f2937;
-  margin: 0 0 16px 0;
+  margin: 0 0 20px 0;
   padding-bottom: 8px;
   border-bottom: 2px solid #3370ff;
   display: inline-block;
 }
 
 .help-section h4 {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #374151;
-  margin: 16px 0 8px 0;
+  margin: 16px 0 10px 0;
 }
 
 .help-section p {
   color: #4b5563;
-  line-height: 1.6;
+  line-height: 1.7;
   margin: 0 0 12px 0;
 }
 
@@ -121,7 +121,7 @@
 }
 
 .help-section li {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .help-section a {
@@ -133,31 +133,83 @@
   text-decoration: underline;
 }
 
+/* 快速开始步骤卡片 */
+.help-quickstart {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.help-step-card {
+  background: linear-gradient(135deg, #f0f7ff 0%, #e6f0ff 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.help-step-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(51, 112, 255, 0.15);
+}
+
+.help-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #3370ff 0%, #2851e3 100%);
+  color: white;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.help-step-card h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 6px 0;
+}
+
+.help-step-card p {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* 步骤区块 */
 .help-step {
   background: #f9fafb;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 12px;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+  border-left: 3px solid #3370ff;
 }
 
 .help-step:last-child {
   margin-bottom: 0;
 }
 
-.help-code {
+/* 代码块 */
+.help-code-block {
   display: block;
   background: #1f2937;
   color: #e5e7eb;
-  padding: 12px 16px;
+  padding: 16px;
   border-radius: 8px;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 13px;
   margin: 12px 0;
   word-break: break-all;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
-.help-code strong {
+.help-code-block strong {
   color: #60a5fa;
 }
 
@@ -170,16 +222,85 @@
   font-size: 13px;
 }
 
+/* 参数说明 */
+.help-params {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.help-param {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  background: white;
+  border-radius: 6px;
+}
+
+.help-param-name {
+  font-weight: 600;
+  color: #3370ff;
+  min-width: 120px;
+  font-size: 13px;
+}
+
+.help-param-desc {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+/* 权限列表 */
+.help-permission-list {
+  margin-top: 8px;
+  padding-left: 24px;
+}
+
+.help-permission-list li {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  color: #374151;
+}
+
+/* 提示框 */
+.help-tip {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: #065f46;
+}
+
+.help-warning {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+/* 表格 */
+.help-table-wrapper {
+  overflow-x: auto;
+  margin-top: 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
 .help-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 12px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .help-table th,
 .help-table td {
-  padding: 12px;
+  padding: 12px 16px;
   text-align: left;
   border-bottom: 1px solid #e5e7eb;
 }
@@ -188,44 +309,195 @@
   background-color: #f9fafb;
   font-weight: 600;
   color: #374151;
+  white-space: nowrap;
 }
 
 .help-table td {
   color: #4b5563;
 }
 
+.help-table tr:last-child td {
+  border-bottom: none;
+}
+
 .help-table tr:hover td {
   background-color: #f9fafb;
 }
 
-.help-faq details {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 12px;
+/* 标签徽章 */
+.help-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #e5e7eb;
+  color: #374151;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.help-faq details:last-child {
+.help-badge-link {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.help-badge-date {
+  background: #fce7f3;
+  color: #9d174d;
+}
+
+/* 使用技巧卡片 */
+.help-tips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.help-tip-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  transition: all 0.2s;
+}
+
+.help-tip-card:hover {
+  border-color: #bfdbfe;
+  background: #f0f7ff;
+}
+
+.help-tip-card h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+}
+
+.help-tip-card p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* 重要提醒区块 */
+.help-section-warning {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.help-section-warning h3 {
+  border-bottom-color: #f59e0b;
+  margin-bottom: 16px;
+}
+
+.help-warning-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.help-warning-list li {
+  margin-bottom: 10px;
+  color: #78350f;
+  line-height: 1.6;
+}
+
+.help-warning-list li:last-child {
   margin-bottom: 0;
 }
 
-.help-faq summary {
+/* FAQ */
+.help-faq {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.help-faq-item {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.help-faq-item:hover {
+  border-color: #bfdbfe;
+}
+
+.help-faq-item summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
   font-weight: 600;
   color: #374151;
   cursor: pointer;
   user-select: none;
+  list-style: none;
 }
 
-.help-faq summary:hover {
+.help-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.help-faq-item summary:hover {
   color: #3370ff;
+  background: #f0f7ff;
 }
 
-.help-faq details p {
-  margin: 12px 0 0 0;
-  padding-top: 12px;
+.help-faq-icon {
+  font-size: 18px;
+}
+
+.help-faq-title {
+  flex: 1;
+}
+
+.help-faq-content {
+  padding: 0 20px 20px 52px;
   border-top: 1px solid #e5e7eb;
+  margin-top: 0;
 }
 
+.help-faq-content p {
+  margin: 16px 0 8px 0;
+  color: #4b5563;
+}
+
+.help-faq-content ol {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+.help-faq-content li {
+  margin-bottom: 6px;
+  color: #4b5563;
+}
+
+/* 联系支持 */
+.help-section-contact {
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.help-section-contact h3 {
+  border-bottom-color: #3370ff;
+  margin-bottom: 16px;
+}
+
+.help-section-contact ul {
+  margin: 0;
+}
+
+.help-section-contact li {
+  margin-bottom: 8px;
+}
+
+/* 页脚 */
 .help-modal-footer {
   padding: 16px 24px;
   border-top: 1px solid #e5e7eb;
@@ -237,7 +509,7 @@
   background: linear-gradient(135deg, #3370ff 0%, #2851e3 100%);
   color: white;
   border: none;
-  padding: 10px 24px;
+  padding: 10px 28px;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -282,4 +554,30 @@
 
 .help-corner-btn:active {
   transform: scale(0.95);
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+  .help-modal-content {
+    max-width: 100%;
+    max-height: 95vh;
+    margin: 10px;
+  }
+  
+  .help-quickstart {
+    grid-template-columns: 1fr;
+  }
+  
+  .help-tips-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .help-param {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .help-param-name {
+    min-width: auto;
+  }
 }

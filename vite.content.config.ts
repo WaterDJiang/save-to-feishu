@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import { copyFileSync, existsSync, mkdirSync } from 'fs';
 
 /**
  * Content Script 专用构建配置
@@ -11,6 +12,7 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  publicDir: false,
   build: {
     outDir: 'dist/content-script',
     emptyOutDir: true,
@@ -26,4 +28,19 @@ export default defineConfig({
       },
     },
   },
+  plugins: [
+    {
+      name: 'copy-css',
+      closeBundle() {
+        // 复制 CSS 文件到 content-script 目录
+        const cssSource = resolve(__dirname, 'public/content-script/floating-panel.css');
+        const cssDest = resolve(__dirname, 'dist/content-script/floating-panel.css');
+        
+        if (existsSync(cssSource)) {
+          copyFileSync(cssSource, cssDest);
+          console.log('[Content Script] CSS 文件已复制');
+        }
+      },
+    },
+  ],
 });

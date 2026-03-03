@@ -1,6 +1,6 @@
 {
   "name": "save-to-feishu",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Chrome extension to save web content to Feishu Bitable",
   "type": "module",
   "scripts": {

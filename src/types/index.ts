@@ -29,6 +29,7 @@ export interface TableConfig {
   name: string;
   appToken: string;
   tableId: string;
+  tableUrl: string;
   fieldMappings: TableFieldMapping[];
   createdAt: number;
   updatedAt: number;
@@ -96,4 +97,5 @@ export interface SaveResult {
   success: boolean;
   recordId?: string;
   error?: string;
+  tableUrl?: string;
 }

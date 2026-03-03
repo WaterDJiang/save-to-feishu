@@ -1,5 +1,6 @@
 import type { AppConfig, TableConfig, FeishuCredentials } from '@/types';
 import { saveEncryptedToStorage, loadEncryptedFromStorage, clearEncryptedStorage } from '@/utils/encryption';
+import { parseAndValidateConfig, repairConfig } from '@/utils/validator';
 
 const CONFIG_VERSION = '1.0.0';
 
@@ -126,15 +127,26 @@ export async function exportConfig(includeSecret: boolean = false): Promise<stri
  */
 export async function importConfig(jsonString: string): Promise<boolean> {
   try {
-    const config = JSON.parse(jsonString) as AppConfig;
+    // 使用验证工具解析和验证
+    let config = parseAndValidateConfig(jsonString);
     
-    if (!config.feishu || !Array.isArray(config.tables)) {
+    // 如果验证失败，尝试修复
+    if (!config) {
+      console.warn('[Storage] 配置验证失败，尝试修复...');
+      const obj = JSON.parse(jsonString);
+      config = repairConfig(obj);
+    }
+    
+    if (!config) {
+      console.error('[Storage] 配置导入失败：无法解析或修复配置');
       return false;
     }
     
     await saveConfig(config);
+    console.log('[Storage] 配置导入成功');
     return true;
-  } catch {
+  } catch (error) {
+    console.error('[Storage] 配置导入异常:', error);
     return false;
   }
 }

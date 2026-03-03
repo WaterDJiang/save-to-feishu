@@ -61,11 +61,13 @@ function SidebarItem({
     <button
       onClick={onClick}
       className={`sidebar-item ${isActive ? 'active' : ''}`}
+      aria-current={isActive ? 'page' : undefined}
+      aria-label={badge !== undefined && badge > 0 ? `${label}，${badge} 个项目` : label}
     >
-      <Icon size={18} />
+      <Icon size={18} aria-hidden="true" />
       <span className="sidebar-label">{label}</span>
       {badge !== undefined && badge > 0 && (
-        <span className="sidebar-badge">{badge}</span>
+        <span className="sidebar-badge" aria-label={`${badge} 个项目`}>{badge}</span>
       )}
     </button>
   );
@@ -207,6 +209,7 @@ function TableConfigView({
     name: '',
     appToken: '',
     tableId: '',
+    tableUrl: '',
     fieldMappings: [],
   });
   const [availableFields, setAvailableFields] = useState<FeishuField[]>([]);
@@ -224,11 +227,35 @@ function TableConfigView({
         name: '',
         appToken: '',
         tableId: '',
+        tableUrl: '',
         fieldMappings: [],
       });
     }
     setAvailableFields([]);
   }, [existingTable]);
+
+  /**
+   * 从飞书多维表格链接中解析 appToken 和 tableId
+   * @param url - 飞书多维表格完整链接
+   * @returns 解析结果，包含 appToken 和 tableId
+   */
+  const parseTableUrl = (url: string): { appToken: string; tableId: string } | null => {
+    try {
+      const urlObj = new URL(url);
+      // 匹配 /base/xxxx 格式
+      const baseMatch = urlObj.pathname.match(/\/base\/([a-zA-Z0-9]+)/);
+      if (!baseMatch) return null;
+
+      const appToken = baseMatch[1];
+      // 从查询参数获取 tableId
+      const tableId = urlObj.searchParams.get('table');
+      if (!tableId) return null;
+
+      return { appToken, tableId };
+    } catch {
+      return null;
+    }
+  };
 
   const loadFields = async () => {
     if (!editingTable.appToken || !editingTable.tableId) return;
@@ -253,6 +280,7 @@ function TableConfigView({
         name: editingTable.name,
         appToken: editingTable.appToken,
         tableId: editingTable.tableId,
+        tableUrl: editingTable.tableUrl || '',
         fieldMappings: editingTable.fieldMappings || [],
         createdAt: existingTable?.createdAt || Date.now(),
         updatedAt: Date.now(),
@@ -340,6 +368,53 @@ function TableConfigView({
           </div>
         </div>
 
+        <div className="form-row">
+          <div className="form-group flex-1">
+            <label className="form-label form-label-with-help">
+              多维表格链接
+              <FieldHelp fieldKey="tableUrl" />
+            </label>
+            <div className="input-with-action">
+              <input
+                type="text"
+                value={editingTable.tableUrl}
+                onChange={(e) => {
+                  const url = e.target.value;
+                  const parsed = parseTableUrl(url);
+                  if (parsed) {
+                    setEditingTable({
+                      ...editingTable,
+                      tableUrl: url,
+                      appToken: parsed.appToken,
+                      tableId: parsed.tableId,
+                    });
+                  } else {
+                    setEditingTable({ ...editingTable, tableUrl: url });
+                  }
+                }}
+                className="form-input"
+                placeholder="粘贴飞书多维表格链接，如：https://xxx.feishu.cn/base/xxx?table=xxx"
+              />
+              {editingTable.tableUrl && parseTableUrl(editingTable.tableUrl) && (
+                <button
+                  type="button"
+                  onClick={() => window.open(editingTable.tableUrl, '_blank')}
+                  className="input-action-btn"
+                  title="在浏览器中打开表格"
+                >
+                  <ExternalLink size={16} />
+                </button>
+              )}
+            </div>
+            {editingTable.tableUrl && !parseTableUrl(editingTable.tableUrl) && (
+              <span className="form-hint form-hint-error">链接格式不正确，请检查链接是否完整</span>
+            )}
+            {editingTable.appToken && editingTable.tableId && (
+              <span className="form-hint form-hint-success">✓ 已自动识别 Token 和表 ID</span>
+            )}
+          </div>
+        </div>
+
         <div className="form-row two-col">
           <div className="form-group">
             <label className="form-label form-label-with-help">
@@ -352,6 +427,7 @@ function TableConfigView({
               onChange={(e) => setEditingTable({ ...editingTable, appToken: e.target.value })}
               className="form-input"
               placeholder="从表格链接复制，如：Bascnxxxxxxxxxx"
+              readOnly
             />
           </div>
           <div className="form-group">
@@ -365,6 +441,7 @@ function TableConfigView({
               onChange={(e) => setEditingTable({ ...editingTable, tableId: e.target.value })}
               className="form-input"
               placeholder="从表格链接复制，如：tblxxxxxxxxxx"
+              readOnly
             />
           </div>
         </div>
@@ -724,7 +801,7 @@ export default function OptionsApp() {
             <HelpCircle size={16} />
             <span>使用帮助</span>
           </button>
-          <p>Save to Feishu v0.1.0</p>
+          <p>Save to Feishu v0.1.1</p>
         </div>
       </aside>
 

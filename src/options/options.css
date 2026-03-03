@@ -345,6 +345,14 @@
   color: var(--text-tertiary);
 }
 
+.form-hint-error {
+  color: var(--danger-500);
+}
+
+.form-hint-success {
+  color: var(--success-500);
+}
+
 .input-with-action {
   position: relative;
   display: flex;

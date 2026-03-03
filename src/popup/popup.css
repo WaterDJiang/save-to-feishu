@@ -462,6 +462,32 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* 可点击的表格卡片 */
+.sf-target-card-clickable {
+  cursor: pointer;
+  transition: var(--sf-transition);
+}
+
+.sf-target-card-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -6px rgba(0, 122, 255, 0.4);
+}
+
+.sf-target-card-clickable:active {
+  transform: translateY(0);
+}
+
+.sf-target-link-icon {
+  margin-left: auto;
+  opacity: 0.8;
+  transition: var(--sf-transition);
+}
+
+.sf-target-card-clickable:hover .sf-target-link-icon {
+  opacity: 1;
+  transform: translate(2px, -2px);
+}
+
 /* 内容预览卡片 */
 .sf-preview-card {
   background: var(--sf-bg-solid);
@@ -600,6 +626,31 @@ body {
   line-height: 1.4;
 }
 
+.sf-alert-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  margin-top: 8px;
+  background: rgba(0, 122, 255, 0.1);
+  color: var(--sf-primary);
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--sf-transition);
+  align-self: flex-start;
+}
+
+.sf-alert-action:hover {
+  background: rgba(0, 122, 255, 0.2);
+}
+
+.sf-alert-action:active {
+  background: rgba(0, 122, 255, 0.25);
+}
+
 /* ===== 按钮组件 ===== */
 .sf-btn {
   display: inline-flex;
@@ -664,6 +715,9 @@ body {
   flex-shrink: 0;
   margin-top: auto;
   padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* ===== 加载状态 ===== */
