@@ -591,6 +591,23 @@
   line-height: 1.4;
 }
 
+.sf-alert-message a {
+  color: #0071e3;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.sf-alert-message a:hover {
+  text-decoration: underline;
+}
+
+.sf-alert-message a:first-of-type {
+  margin-top: 0;
+}
+
 /* 按钮 */
 .sf-btn {
   display: inline-flex;

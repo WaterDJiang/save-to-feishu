@@ -55,3 +55,4 @@ coverage
 # Reference materials (if not needed in repo)
 参考/
 dist.zip
+*.zip

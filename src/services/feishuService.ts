@@ -1,5 +1,6 @@
-import type { FeishuCredentials, FeishuField, FeishuTable, SaveResult, ExtractedPageContent, TableConfig } from '@/types';
+import type { FeishuCredentials, FeishuField, FeishuTable, SaveResult, ExtractedPageContent, TableConfig, HtmlElementInfo } from '@/types';
 import { getFeishuCredentials } from './storageService';
+import { createDocumentWithElements } from './feishuDocumentService';
 
 const LARK_API_BASE = 'https://open.feishu.cn/open-apis';
 
@@ -124,7 +125,7 @@ export async function getTenantToken(forceRefresh: boolean = false): Promise<str
 /**
  * 获取认证请求头
  */
-async function getAuthHeaders(forceRefresh: boolean = false): Promise<HeadersInit | null> {
+export async function getAuthHeaders(forceRefresh: boolean = false): Promise<HeadersInit | null> {
   const token = await getTenantToken(forceRefresh);
   if (!token) {
     console.error('[Feishu] 无法获取 Token');
@@ -362,7 +363,8 @@ function formatFieldValue(value: any, fieldType: FeishuField['type']): any {
  */
 export async function saveToFeishu(
   tableConfig: TableConfig,
-  content: ExtractedPageContent
+  content: ExtractedPageContent,
+  htmlElements?: HtmlElementInfo[]
 ): Promise<SaveResult> {
   try {
     console.log('[Feishu] 开始保存数据到飞书表格...');
@@ -371,6 +373,21 @@ export async function saveToFeishu(
       tableId: tableConfig.tableId,
       name: tableConfig.name
     });
+
+    // 如果提供了HTML元素，先创建飞书文档
+    let documentUrl: string | undefined;
+    if (htmlElements && htmlElements.length > 0) {
+      console.log('[Feishu] 检测到HTML元素，共', htmlElements.length, '个');
+      const doc = await createDocumentWithElements(content, htmlElements);
+      if (doc) {
+        documentUrl = doc.url;
+        console.log('[Feishu] 飞书文档创建成功，URL:', documentUrl);
+      } else {
+        console.warn('[Feishu] 飞书文档创建失败，将使用纯文本内容');
+      }
+    } else {
+      console.log('[Feishu] 未检测到HTML元素，将使用纯文本');
+    }
     
     const headers = await getAuthHeaders();
     if (!headers) {
@@ -429,8 +446,17 @@ export async function saveToFeishu(
         case 'title':
           value = content.title;
           break;
+        case 'docUrl':
+          value = documentUrl || '';
+          console.log(`[Feishu] DocUrl 字段值:`, value);
+          break;
+        case 'contentText':
+          value = content.content || '';
+          console.log(`[Feishu] ContentText 字段值:`, value);
+          break;
         case 'content':
           value = content.content || '';
+          console.log(`[Feishu] Content 字段值:`, value);
           break;
         case 'image':
           value = content.mainImage || '';
@@ -592,6 +618,7 @@ export async function saveToFeishu(
       success: true,
       recordId,
       tableUrl,
+      documentUrl,
     };
   } catch (error) {
     console.error('[Feishu] 保存过程异常:', error);

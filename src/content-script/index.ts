@@ -1,4 +1,4 @@
-import type { ExtractedPageContent, TableConfig, SaveResult } from '@/types';
+import type { ExtractedPageContent, TableConfig, SaveResult, HtmlElementInfo } from '@/types';
 
 /**
  * 从 meta 标签获取内容
@@ -123,6 +123,181 @@ function extractPublishDate(): string | null {
 }
 
 /**
+ * 提取页面HTML内容
+ */
+function extractPageHtml(): string {
+  const selectors = [
+    '#js_content',              // 微信公众号
+    'article',
+    '[role="main"]',
+    '.post-content',
+    '.entry-content',
+    '.article-content',
+    '.markdown-body',            // GitHub/文档类
+    'main',
+    '.content',
+    '#content',
+  ];
+
+  for (const selector of selectors) {
+    const element = document.querySelector(selector) as HTMLElement;
+    if (element) {
+      const html = element.innerHTML?.trim();
+      if (html && html.length > 50) {
+        return html;
+      }
+    }
+  }
+
+  return document.body.innerHTML?.trim() || '';
+}
+
+/**
+ * 解析HTML为元素信息数组（在 content-script 中执行，因为 Service Worker 没有 DOMParser）
+ */
+function parseHtmlToElements(html: string): HtmlElementInfo[] {
+  const elements: HtmlElementInfo[] = [];
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // 提取主要内容
+    const contentElement = doc.querySelector('body');
+    if (!contentElement) return elements;
+
+    // 记录已处理的元素，避免重复
+    const processedElements = new Set<Element>();
+
+    // 递归处理元素
+    const processElement = (element: Element): void => {
+      const tagName = element.tagName.toLowerCase();
+
+      // 跳过不需要的元素
+      if (['script', 'style', 'noscript', 'iframe', 'svg'].includes(tagName)) {
+        return;
+      }
+
+      // 如果已经被处理过，跳过
+      if (processedElements.has(element)) {
+        return;
+      }
+
+      // 处理标题
+      if (['h1', 'h2', 'h3'].includes(tagName)) {
+        processedElements.add(element);
+        const level = tagName === 'h1' ? 1 : tagName === 'h2' ? 2 : 3;
+        const text = element.textContent?.trim();
+        if (text) {
+          elements.push({
+            type: 'heading',
+            content: text,
+            level: level as 1 | 2 | 3,
+          });
+        }
+        return;
+      }
+
+      // 处理图片
+      if (tagName === 'img') {
+        processedElements.add(element);
+        const src = element.getAttribute('src') || element.getAttribute('data-src');
+        if (src && !src.startsWith('data:')) {
+          // 跳过 data URI 和小图标
+          if (!src.includes('icon') && !src.includes('avatar') && !src.includes('logo')) {
+            elements.push({
+              type: 'image',
+              imageUrl: src,
+            });
+          }
+        }
+        return;
+      }
+
+      // 处理列表
+      if (tagName === 'ul' || tagName === 'ol') {
+        processedElements.add(element);
+        const listType = tagName === 'ul' ? 'bullet' : 'ordered';
+        const listItems = element.querySelectorAll(':scope > li');
+
+        listItems.forEach(li => {
+          processedElements.add(li);
+          const text = li.textContent?.trim();
+          if (text) {
+            elements.push({
+              type: 'list',
+              content: text,
+              listType,
+            });
+          }
+        });
+        return;
+      }
+
+      // 处理列表项（如果父元素已经被处理，跳过）
+      if (tagName === 'li' && processedElements.has(element.parentElement!)) {
+        return;
+      }
+
+      // 处理链接（独立链接）
+      if (tagName === 'a') {
+        const href = element.getAttribute('href');
+        const text = element.textContent?.trim();
+        const parent = element.parentElement;
+        const isInlineLink = parent && !['p', 'div', 'section', 'article', 'li'].includes(parent.tagName.toLowerCase());
+
+        if (href && text && isInlineLink) {
+          processedElements.add(element);
+          elements.push({
+            type: 'link',
+            content: text,
+            linkUrl: href,
+          });
+          return;
+        }
+      }
+
+      // 处理段落和块级元素
+      if (['p', 'div', 'section', 'article', 'main', 'blockquote', 'pre'].includes(tagName)) {
+        const childBlocks = element.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > ul, :scope > ol, :scope > img, :scope > p, :scope > div, :scope > article, :scope > section');
+
+        if (childBlocks.length > 0) {
+          Array.from(element.children).forEach(child => {
+            processElement(child);
+          });
+        } else {
+          const text = element.textContent?.trim();
+          if (text && text.length > 0) {
+            processedElements.add(element);
+            element.querySelectorAll('*').forEach(el => processedElements.add(el));
+            elements.push({
+              type: 'text',
+              content: text,
+            });
+          }
+        }
+        return;
+      }
+
+      // 其他元素，递归处理子元素
+      Array.from(element.children).forEach(child => {
+        processElement(child);
+      });
+    };
+
+    // 开始处理
+    Array.from(contentElement.children).forEach(child => {
+      processElement(child);
+    });
+
+  } catch (error) {
+    console.error('[ContentScript] HTML解析异常:', error);
+  }
+
+  return elements;
+}
+
+/**
  * 提取页面内容
  */
 function extractPageContent(): ExtractedPageContent {
@@ -169,10 +344,10 @@ async function saveTableConfigs(tables: TableConfig[]): Promise<void> {
 /**
  * 通过 background 保存到飞书
  */
-async function saveToFeishu(table: TableConfig, content: ExtractedPageContent): Promise<SaveResult> {
+async function saveToFeishu(table: TableConfig, content: ExtractedPageContent, htmlElements?: HtmlElementInfo[]): Promise<SaveResult> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
-      { action: 'saveToFeishu', table, content },
+      { action: 'saveToFeishu', table, content, htmlElements },
       (response) => {
         resolve(response || { success: false, error: '保存失败' });
       }
@@ -642,7 +817,16 @@ class FloatingPanel {
     }
 
     try {
-      const result = await saveToFeishu(this.selectedTable, this.content);
+      // 提取并解析HTML内容（在 content-script 中解析，因为 Service Worker 没有 DOMParser）
+      console.log('[ContentScript] 开始提取HTML...');
+      const html = extractPageHtml();
+      console.log('[ContentScript] HTML长度:', html.length);
+
+      console.log('[ContentScript] 开始解析HTML为元素...');
+      const htmlElements = parseHtmlToElements(html);
+      console.log('[ContentScript] 解析完成，共', htmlElements.length, '个元素');
+
+      const result = await saveToFeishu(this.selectedTable, this.content, htmlElements);
       this.showResult(result);
     } catch (err) {
       this.showResult({
@@ -662,14 +846,27 @@ class FloatingPanel {
     const existingAlert = savePage.querySelector('.sf-alert');
     existingAlert?.remove();
 
+    let messageHtml = '';
+    if (result.success) {
+      messageHtml = `
+        <span class="sf-alert-title">保存成功</span>
+        ${result.tableUrl ? `<span class="sf-alert-message"><a href="${this.escapeHtml(result.tableUrl)}" target="_blank">查看表格记录</a></span>` : ''}
+        ${result.documentUrl ? `<span class="sf-alert-message"><a href="${this.escapeHtml(result.documentUrl)}" target="_blank">查看飞书文档</a></span>` : ''}
+      `;
+    } else {
+      messageHtml = `
+        <span class="sf-alert-title">保存失败</span>
+        ${result.error ? `<span class="sf-alert-message">${this.escapeHtml(result.error)}</span>` : ''}
+      `;
+    }
+
     const alertHtml = `
       <div class="sf-alert ${result.success ? 'sf-alert-success' : 'sf-alert-error'}">
         <div class="sf-alert-icon">
           ${result.success ? this.createSVGIcon('checkCircle', 18) : this.createSVGIcon('alertCircle', 18)}
         </div>
         <div class="sf-alert-content">
-          <span class="sf-alert-title">${result.success ? '保存成功' : '保存失败'}</span>
-          ${result.error ? `<span class="sf-alert-message">${this.escapeHtml(result.error)}</span>` : ''}
+          ${messageHtml}
         </div>
       </div>
     `;

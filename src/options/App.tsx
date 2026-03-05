@@ -331,10 +331,9 @@ function TableConfigView({
   const sourceTypeOptions = [
     { value: '', label: '-- 不保存此字段 --' },
     { value: 'url', label: '🔗 页面网址', desc: '网页链接地址' },
-    { value: 'title', label: '📝 文章标题', desc: '网页标题' },
-    { value: 'content', label: '📄 正文内容', desc: '网页正文摘要' },
-    { value: 'image', label: '🖼️ 封面图片', desc: '网页首图URL' },
-    { value: 'saveTime', label: '🕐 保存时间', desc: '自动记录当前时间' },
+    { value: 'title', label: '📝 标题', desc: '网页标题' },
+    { value: 'docUrl', label: '📄 飞书文档链接', desc: '创建飞书文档并保存链接（含图片和格式）' },
+    { value: 'contentText', label: '🧾 正文内容', desc: '页面正文文本（context）' },
     { value: 'static', label: '⚡ 固定值', desc: '自定义固定内容' },
   ];
 

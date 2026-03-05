@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Save to Feishu",
-  "version": "0.1.1",
-  "description": "一键保存网页内容到飞书多维表格",
+  "version": "0.2.0",
+  "description": "一键保存网页内容到飞书多维表格和文档",
   "permissions": [
     "storage",
     "activeTab",
@@ -10,7 +10,8 @@
     "tabs"
   ],
   "host_permissions": [
-    "https://open.feishu.cn/*"
+    "https://open.feishu.cn/*",
+    "https://*.feishu.cn/*"
   ],
   "background": {
     "service_worker": "background/index.js"

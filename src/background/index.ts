@@ -43,15 +43,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       });
     return true;
   } else if (message.action === 'saveToFeishu') {
-    feishuSaveToFeishu(message.table, message.content)
+    feishuSaveToFeishu(message.table, message.content, message.htmlElements)
       .then(result => {
         sendResponse(result);
       })
       .catch(error => {
         console.error('保存到飞书失败:', error);
-        sendResponse({ 
-          success: false, 
-          error: error instanceof Error ? error.message : '保存失败' 
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : '保存失败'
         });
       });
     return true;
