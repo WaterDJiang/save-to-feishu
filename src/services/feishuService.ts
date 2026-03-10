@@ -1,5 +1,5 @@
 import type { FeishuCredentials, FeishuField, FeishuTable, SaveResult, ExtractedPageContent, TableConfig, HtmlElementInfo } from '@/types';
-import { getFeishuCredentials } from './storageService';
+import { getFeishuCredentials, saveTableConfig } from './storageService';
 import { createDocumentWithElements } from './feishuDocumentService';
 
 const LARK_API_BASE = 'https://open.feishu.cn/open-apis';
@@ -408,6 +408,8 @@ export async function saveToFeishu(
     console.log('[Feishu] 表格实际字段列表:', actualFields);
     
     const fields: Record<string, any> = {};
+    let hasMappingUpdates = false;
+    const missingMappings: Array<{ feishuFieldId: string; feishuFieldName: string }> = [];
     
     console.log('[Feishu] 字段映射配置:', tableConfig.fieldMappings);
     console.log('[Feishu] 页面内容数据:', {
@@ -426,14 +428,21 @@ export async function saveToFeishu(
       }
       
       // 查找对应的实际字段
-      const actualField = actualFieldMap.get(mapping.feishuFieldId);
+      let actualField = actualFieldMap.get(mapping.feishuFieldId);
+      if (!actualField && mapping.feishuFieldName) {
+        actualField = actualFields.find(field => field.name === mapping.feishuFieldName);
+        if (actualField) {
+          console.warn(`[Feishu] 字段 ID ${mapping.feishuFieldId} 已失效，按名称匹配为 ${actualField.id}`);
+          mapping.feishuFieldId = actualField.id;
+          mapping.feishuFieldName = actualField.name;
+          hasMappingUpdates = true;
+        }
+      }
       if (!actualField) {
         console.error(`[Feishu] 字段 ID ${mapping.feishuFieldId} (${mapping.feishuFieldName}) 不存在于表格中！`);
         console.error(`[Feishu] 可用的字段:`, actualFields.map(f => ({ id: f.id, name: f.name })));
-        return { 
-          success: false, 
-          error: `字段 "${mapping.feishuFieldName}" 的 ID (${mapping.feishuFieldId}) 不存在于表格中。请重新获取表格字段并配置映射。` 
-        };
+        missingMappings.push({ feishuFieldId: mapping.feishuFieldId, feishuFieldName: mapping.feishuFieldName });
+        continue;
       }
       
       let value: any = null;
@@ -489,9 +498,17 @@ export async function saveToFeishu(
       }
     }
     
+    if (hasMappingUpdates) {
+      await saveTableConfig({ ...tableConfig, fieldMappings: tableConfig.fieldMappings });
+    }
+
     if (Object.keys(fields).length === 0) {
       console.error('[Feishu] 没有有效的字段映射');
-      return { success: false, error: '没有有效的字段映射，请检查映射配置' };
+      const missingNames = missingMappings.map(item => item.feishuFieldName).filter(Boolean).join('、');
+      const errorMessage = missingNames
+        ? `字段映射无效：${missingNames}。请重新获取表格字段并配置映射。`
+        : '没有有效的字段映射，请检查映射配置';
+      return { success: false, error: errorMessage };
     }
     
     console.log('[Feishu] 准备发送的数据:', {

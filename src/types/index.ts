@@ -127,6 +127,8 @@ export const BlockType = {
   CODE: 14,
   QUOTE: 15,
   IMAGE: 17,
+  // 文档图片块（需要三步上传）
+  DOCX_IMAGE: 27,
 } as const;
 
 /**

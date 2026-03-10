@@ -27,16 +27,28 @@ function extractMainImage(): string | null {
   if (twitterImage) return twitterImage;
 
   const images = Array.from(document.querySelectorAll('img'))
-    .filter(img => {
-      const src = img.src || img.getAttribute('data-src');
+    .map(img => {
+      const dataSrc = img.getAttribute('data-src') || img.getAttribute('data-original') || img.getAttribute('data-actualsrc') || img.getAttribute('data-lazy-src');
+      const rawSrc = dataSrc || img.getAttribute('src') || img.src;
+      if (!rawSrc) return '';
+      const normalized = rawSrc.replace(/&amp;/g, '&').trim();
+      if (normalized.startsWith('//')) return `https:${normalized}`;
+      return normalized;
+    })
+    .filter(src => {
       if (!src) return false;
+      if (src.startsWith('data:')) return false;
       if (src.includes('icon') || src.includes('logo') || src.includes('avatar')) return false;
+      return true;
+    })
+    .filter(src => {
+      const img = document.querySelector(`img[src="${src}"], img[data-src="${src}"]`) as HTMLImageElement | null;
+      if (!img) return true;
       const width = img.naturalWidth || img.width;
       const height = img.naturalHeight || img.height;
+      if (!width && !height) return true;
       return width > 200 && height > 100;
-    })
-    .map(img => img.src || img.getAttribute('data-src') || '')
-    .filter(Boolean);
+    });
 
   return images[0] || null;
 }
@@ -201,15 +213,16 @@ function parseHtmlToElements(html: string): HtmlElementInfo[] {
       // 处理图片
       if (tagName === 'img') {
         processedElements.add(element);
-        const src = element.getAttribute('src') || element.getAttribute('data-src');
-        if (src && !src.startsWith('data:')) {
-          // 跳过 data URI 和小图标
-          if (!src.includes('icon') && !src.includes('avatar') && !src.includes('logo')) {
-            elements.push({
-              type: 'image',
-              imageUrl: src,
-            });
-          }
+        const dataSrc = element.getAttribute('data-src') || element.getAttribute('data-original') || element.getAttribute('data-actualsrc') || element.getAttribute('data-lazy-src');
+        const rawSrc = dataSrc || element.getAttribute('src');
+        if (!rawSrc) return;
+        const normalized = rawSrc.replace(/&amp;/g, '&').trim();
+        const finalSrc = normalized.startsWith('//') ? `https:${normalized}` : normalized;
+        if (!finalSrc.startsWith('data:') && !finalSrc.includes('icon') && !finalSrc.includes('avatar') && !finalSrc.includes('logo')) {
+          elements.push({
+            type: 'image',
+            imageUrl: finalSrc,
+          });
         }
         return;
       }
@@ -806,6 +819,7 @@ class FloatingPanel {
 
     const saveBtn = this.panel?.querySelector('#sf-btn-save');
     if (saveBtn) {
+      saveBtn.classList.add('is-saving');
       saveBtn.setAttribute('disabled', 'true');
       // 使用 DOM API 而非 innerHTML
       saveBtn.textContent = '';
@@ -879,6 +893,7 @@ class FloatingPanel {
     // 重置保存按钮
     const saveBtn = this.panel?.querySelector('#sf-btn-save');
     if (saveBtn) {
+      saveBtn.classList.remove('is-saving');
       saveBtn.removeAttribute('disabled');
       saveBtn.innerHTML = `${this.createSVGIcon('save', 18)}<span>保存到飞书</span>`;
     }
@@ -927,9 +942,65 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   } else if (message.action === 'extractContent') {
     const content = extractPageContent();
     sendResponse(content);
+  } else if (message.action === 'showNotification') {
+    // 显示通知
+    showPageNotification(message.message, message.type);
+    sendResponse({ success: true });
   }
   return true;
 });
+
+/**
+ * 在页面内显示通知
+ */
+function showPageNotification(message: string, type: 'success' | 'error' = 'success') {
+  // 检查是否已存在通知
+  const existing = document.getElementById('save-to-feishu-notification');
+  if (existing) {
+    existing.remove();
+  }
+
+  const notification = document.createElement('div');
+  notification.id = 'save-to-feishu-notification';
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000000;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: slideIn 0.3s ease;
+    ${type === 'success'
+      ? 'background: #34c759; color: white;'
+      : 'background: #ff3b30; color: white;'}
+  `;
+
+  notification.textContent = message;
+  document.body.appendChild(notification);
+
+  // 3秒后自动消失
+  setTimeout(() => {
+    notification.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
+
+// 添加通知动画样式
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+  }
+`;
+document.head.appendChild(style);
 
 /**
  * 发送提取的内容到 background
