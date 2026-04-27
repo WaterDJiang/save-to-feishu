@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Save to Feishu",
-  "version": "0.3.11",
+  "version": "0.4.0",
   "description": "一键保存网页内容到飞书多维表格和文档",
   "permissions": [
     "storage",
