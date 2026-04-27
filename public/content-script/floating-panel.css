@@ -352,6 +352,25 @@
   color: #86868b;
 }
 
+/* ===== 保存为 Markdown ===== */
+.sf-markdown-action {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.sf-btn-markdown {
+  background: #ffffff;
+  color: #6e6e73;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.sf-btn-markdown:hover:not(:disabled) {
+  background: #f5f5f7;
+  color: #1d1d1f;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
 /* ===== 保存页面 ===== */
 .sf-save-page {
   display: flex;

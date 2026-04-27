@@ -410,6 +410,7 @@ class FloatingPanel {
       close: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`,
       folderOpen: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>`,
       clock: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+      download: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>`,
     };
     return icons[type] || '';
   }
@@ -632,6 +633,12 @@ class FloatingPanel {
           ${this.createSVGIcon('clock', 12)}
           <span>点击表格选择，使用箭头调整顺序</span>
         </div>
+        <div class="sf-markdown-action">
+          <button class="sf-btn sf-btn-secondary sf-btn-large sf-btn-markdown" id="sf-btn-save-markdown" ${!this.content ? 'disabled' : ''}>
+            ${this.createSVGIcon('download', 18)}
+            <span>仅保存 markdown 到电脑</span>
+          </button>
+        </div>
       </div>
     `;
   }
@@ -796,6 +803,12 @@ class FloatingPanel {
       });
     });
 
+    // 保存为 Markdown
+    this.panel.querySelector('#sf-btn-save-markdown')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handleSaveAsMarkdown();
+    });
+
     // 下移
     this.panel.querySelectorAll('[data-action="move-down"]').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -848,6 +861,144 @@ class FloatingPanel {
         error: err instanceof Error ? err.message : '保存失败',
       });
     }
+  }
+
+  /**
+   * 保存为 Markdown 文件
+   */
+  private handleSaveAsMarkdown() {
+    if (!this.content) return;
+
+    try {
+      const html = extractPageHtml();
+      const htmlElements = parseHtmlToElements(html);
+      const markdown = this.buildMarkdown(this.content, htmlElements);
+      const filename = this.buildMarkdownFilename(this.content.title);
+      this.triggerDownload(markdown, filename);
+    } catch (err) {
+      // 降级：只使用纯文本内容
+      const markdown = this.buildMarkdown(this.content);
+      const filename = this.buildMarkdownFilename(this.content.title);
+      this.triggerDownload(markdown, filename);
+    }
+  }
+
+  /**
+   * 构建结构化 Markdown 内容
+   */
+  private buildMarkdown(content: ExtractedPageContent, htmlElements?: HtmlElementInfo[]): string {
+    const lines: string[] = [];
+
+    lines.push(`# ${content.title}`);
+    lines.push('');
+
+    const metaLines: string[] = [];
+    if (content.url) metaLines.push(`- **链接**: ${content.url}`);
+    if (content.description) metaLines.push(`- **摘要**: ${content.description}`);
+    if (content.publishedAt) metaLines.push(`- **发布时间**: ${content.publishedAt}`);
+    metaLines.push(`- **保存时间**: ${content.savedAt}`);
+
+    if (metaLines.length > 0) {
+      lines.push(...metaLines);
+      lines.push('');
+    }
+
+    lines.push('---');
+    lines.push('');
+
+    if (htmlElements && htmlElements.length > 0) {
+      let inList = false;
+      let orderedIndex = 0;
+
+      for (let i = 0; i < htmlElements.length; i++) {
+        const el = htmlElements[i];
+
+        switch (el.type) {
+          case 'heading': {
+            if (inList) { lines.push(''); inList = false; }
+            const prefix = '#'.repeat((el.level || 1) + 1);
+            lines.push(`${prefix} ${el.content}`);
+            lines.push('');
+            orderedIndex = 0;
+            break;
+          }
+          case 'text': {
+            if (inList) { lines.push(''); inList = false; }
+            lines.push(el.content || '');
+            lines.push('');
+            orderedIndex = 0;
+            break;
+          }
+          case 'list': {
+            const nextEl = htmlElements[i + 1];
+            const isListContinuation = nextEl?.type === 'list' && nextEl.listType === el.listType;
+
+            if (!inList) {
+              lines.push('');
+              inList = true;
+              orderedIndex = 0;
+            }
+
+            if (el.listType === 'ordered') {
+              orderedIndex++;
+              lines.push(`${orderedIndex}. ${el.content}`);
+            } else {
+              lines.push(`- ${el.content}`);
+            }
+
+            if (!isListContinuation) {
+              lines.push('');
+              inList = false;
+            }
+            break;
+          }
+          case 'link': {
+            if (inList) { lines.push(''); inList = false; }
+            if (el.linkUrl && el.content) {
+              lines.push(`[${el.content}](${el.linkUrl})`);
+            } else {
+              lines.push(el.content || '');
+            }
+            lines.push('');
+            orderedIndex = 0;
+            break;
+          }
+        }
+      }
+    } else if (content.content) {
+      lines.push(content.content);
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * 生成 Markdown 文件名
+   */
+  private buildMarkdownFilename(title: string): string {
+    const sanitized = title
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim()
+      .slice(0, 80);
+    return `${sanitized || 'page-content'}.md`;
+  }
+
+  /**
+   * 触发文件下载
+   */
+  private triggerDownload(content: string, filename: string): void {
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   /**

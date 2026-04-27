@@ -382,6 +382,25 @@ body {
   color: var(--sf-text-tertiary);
 }
 
+/* ===== 保存为 Markdown ===== */
+.sf-markdown-action {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--sf-separator);
+}
+
+.sf-btn-markdown {
+  background: var(--sf-bg-solid);
+  color: var(--sf-text-secondary);
+  border: 0.5px solid var(--sf-separator);
+}
+
+.sf-btn-markdown:hover:not(:disabled) {
+  background: var(--sf-bg-secondary);
+  color: var(--sf-text);
+  border-color: var(--sf-separator-strong);
+}
+
 /* ===== 保存详情页面 ===== */
 .sf-save-page {
   flex: 1;

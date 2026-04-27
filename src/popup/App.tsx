@@ -18,10 +18,12 @@ import {
   Link2,
   Clock,
   ExternalLink,
+  Download,
 } from 'lucide-react';
-import type { ExtractedPageContent, TableConfig, SaveResult } from '@/types';
+import type { ExtractedPageContent, TableConfig, SaveResult, HtmlElementInfo } from '@/types';
 import { getTableConfigs, saveTableConfigs } from '@/services/storageService';
 import { saveToFeishu } from '@/services/feishuService';
+import { generateMarkdown, generateMarkdownFilename, downloadMarkdown } from '@/utils/markdownGenerator';
 
 /**
  * Apple 风格浮窗 - 保存到飞书
@@ -337,6 +339,129 @@ function PopupApp() {
   };
 
   /**
+   * 保存为 Markdown 文件
+   */
+  const handleSaveAsMarkdown = async () => {
+    if (!content) return;
+
+    try {
+      // 通过 content-script 提取 HTML 元素（popup 中没有 DOMParser）
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      let htmlElements: HtmlElementInfo[] | undefined;
+
+      if (tab?.id) {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            const selectors = [
+              '#js_content', 'article', '[role="main"]',
+              '.post-content', '.entry-content', '.article-content',
+              '.markdown-body', 'main', '.content', '#content',
+            ];
+            let html = '';
+            for (const selector of selectors) {
+              const el = document.querySelector(selector) as HTMLElement;
+              if (el && el.innerHTML?.trim().length > 50) {
+                html = el.innerHTML.trim();
+                break;
+              }
+            }
+            if (!html) html = document.body.innerHTML?.trim() || '';
+
+            // 解析 HTML 元素
+            const elements: Array<{
+              type: string;
+              content?: string;
+              level?: number;
+              imageUrl?: string;
+              listType?: string;
+              linkUrl?: string;
+            }> = [];
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const contentEl = doc.querySelector('body');
+            if (!contentEl) return elements;
+
+            const processed = new Set<Element>();
+            const process = (element: Element) => {
+              const tag = element.tagName.toLowerCase();
+              if (['script', 'style', 'noscript', 'iframe', 'svg'].includes(tag)) return;
+              if (processed.has(element)) return;
+
+              if (['h1', 'h2', 'h3'].includes(tag)) {
+                processed.add(element);
+                const text = element.textContent?.trim();
+                if (text) elements.push({ type: 'heading', content: text, level: tag === 'h1' ? 1 : tag === 'h2' ? 2 : 3 });
+                return;
+              }
+              if (tag === 'img') {
+                processed.add(element);
+                const src = element.getAttribute('data-src') || element.getAttribute('data-original') || element.getAttribute('src');
+                if (src && !src.startsWith('data:')) {
+                  const normalized = src.replace(/&amp;/g, '&').trim().replace(/^\/\//, 'https://');
+                  if (!normalized.includes('icon') && !normalized.includes('avatar') && !normalized.includes('logo')) {
+                    elements.push({ type: 'image', imageUrl: normalized });
+                  }
+                }
+                return;
+              }
+              if (tag === 'ul' || tag === 'ol') {
+                processed.add(element);
+                element.querySelectorAll(':scope > li').forEach(li => {
+                  processed.add(li);
+                  const text = li.textContent?.trim();
+                  if (text) elements.push({ type: 'list', content: text, listType: tag === 'ul' ? 'bullet' : 'ordered' });
+                });
+                return;
+              }
+              if (tag === 'li' && processed.has(element.parentElement!)) return;
+              if (tag === 'a') {
+                const href = element.getAttribute('href');
+                const text = element.textContent?.trim();
+                if (href && text) {
+                  processed.add(element);
+                  elements.push({ type: 'link', content: text, linkUrl: href });
+                  return;
+                }
+              }
+              if (['p', 'div', 'section', 'article', 'main', 'blockquote', 'pre'].includes(tag)) {
+                const children = element.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > ul, :scope > ol, :scope > img, :scope > p, :scope > div');
+                if (children.length > 0) {
+                  Array.from(element.children).forEach(process);
+                } else {
+                  const text = element.textContent?.trim();
+                  if (text) {
+                    processed.add(element);
+                    element.querySelectorAll('*').forEach(el => processed.add(el));
+                    elements.push({ type: 'text', content: text });
+                  }
+                }
+                return;
+              }
+              Array.from(element.children).forEach(process);
+            };
+            Array.from(contentEl.children).forEach(process);
+            return elements;
+          },
+        });
+        if (results?.[0]?.result) {
+          htmlElements = results[0].result as HtmlElementInfo[];
+        }
+      }
+
+      const markdown = generateMarkdown(content, htmlElements);
+      const filename = generateMarkdownFilename(content.title);
+      downloadMarkdown(markdown, filename);
+    } catch (err) {
+      console.error('保存 Markdown 失败:', err);
+      // 降级：只使用纯文本内容
+      const markdown = generateMarkdown(content);
+      const filename = generateMarkdownFilename(content.title);
+      downloadMarkdown(markdown, filename);
+    }
+  };
+
+  /**
    * 处理表格排序
    */
   const handleMoveUp = async (index: number) => {
@@ -410,6 +535,16 @@ function PopupApp() {
         <div className="sf-list-footer">
           <Clock size={12} strokeWidth={1.5} />
           <span>点击表格选择，使用箭头调整顺序</span>
+        </div>
+        <div className="sf-markdown-action">
+          <button
+            className="sf-btn sf-btn-secondary sf-btn-large sf-btn-markdown"
+            onClick={handleSaveAsMarkdown}
+            disabled={!content}
+          >
+            <Download size={18} strokeWidth={1.5} />
+            <span>仅保存 markdown 到电脑</span>
+          </button>
         </div>
       </div>
     );
