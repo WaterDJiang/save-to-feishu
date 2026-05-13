@@ -73,6 +73,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .sf-panel-logo {
@@ -87,12 +88,38 @@
   font-weight: 600;
   color: #1d1d1f;
   letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sf-panel-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sf-panel-interop-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: #0071e3;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sf-panel-interop-btn:hover {
+  background: rgba(0, 113, 227, 0.1);
+}
+
+.sf-panel-interop-btn:active {
+  transform: translateY(1px);
 }
 
 .sf-panel-btn {
@@ -357,6 +384,65 @@
   margin-top: 8px;
   padding-top: 12px;
   border-top: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sf-interop-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 10px;
+  background: #f8fbff;
+  color: #1d1d1f;
+  border: 1px solid rgba(0, 113, 227, 0.1);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.sf-interop-strip:hover {
+  background: #f2f7ff;
+  border-color: rgba(0, 113, 227, 0.2);
+}
+
+.sf-interop-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: #0071e3;
+  background: #ffffff;
+  border: 1px solid rgba(0, 113, 227, 0.1);
+  border-radius: 9px;
+}
+
+.sf-interop-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sf-interop-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: #1d1d1f;
+}
+
+.sf-interop-desc {
+  font-size: 10.5px;
+  color: #6e6e73;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sf-btn-markdown {

@@ -26,6 +26,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .then(saveMode => sendResponse({ saveMode }))
       .catch(() => sendResponse({ saveMode: 'feishu' }));
     return true;
+  } else if (message.action === 'openInteropOptions') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('options/index.html#interop') });
+    sendResponse({ success: true });
   } else if (message.action === 'openOptionsPage' || message.action === 'openOptions') {
     chrome.runtime.openOptionsPage();
     sendResponse({ success: true });

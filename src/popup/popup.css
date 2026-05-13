@@ -130,6 +130,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   -webkit-app-region: no-drag;
 }
 
@@ -145,13 +146,39 @@ body {
   font-weight: 600;
   color: var(--sf-text);
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sf-header-actions {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
   -webkit-app-region: no-drag;
+}
+
+.sf-header-interop-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--sf-primary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--sf-transition);
+}
+
+.sf-header-interop-btn:hover {
+  background: var(--sf-primary-light);
+}
+
+.sf-header-interop-btn:active {
+  transform: translateY(1px);
 }
 
 .sf-header-btn {

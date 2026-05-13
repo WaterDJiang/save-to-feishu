@@ -875,6 +875,16 @@ function PopupApp() {
           </span>
         </div>
         <div className="sf-header-actions">
+          {!selectedTable && (
+            <button
+              className="sf-header-interop-btn"
+              onClick={() => openOptions('interop')}
+              title="Notion 与飞书同步"
+              aria-label="Notion 与飞书同步"
+            >
+              <ArrowLeftRight size={13} strokeWidth={1.7} />
+            </button>
+          )}
           <button 
             className="sf-header-btn" 
             onClick={extractContent}

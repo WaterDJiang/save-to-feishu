@@ -440,6 +440,7 @@ class FloatingPanel {
       folderOpen: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>`,
       clock: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
       download: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>`,
+      arrowLeftRight: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>`,
     };
     return icons[type] || '';
   }
@@ -597,6 +598,11 @@ class FloatingPanel {
           <span class="sf-panel-title">${title}</span>
         </div>
         <div class="sf-panel-actions">
+          ${!this.selectedTable ? `
+          <button class="sf-panel-interop-btn" id="sf-btn-open-interop-header" title="Notion 与飞书同步" aria-label="Notion 与飞书同步">
+            ${this.createSVGIcon('arrowLeftRight', 13)}
+          </button>
+          ` : ''}
           <button class="sf-panel-btn" id="sf-btn-refresh" title="刷新">
             ${this.createSVGIcon('refresh', 14)}
           </button>
@@ -628,6 +634,16 @@ class FloatingPanel {
             <span>保存 Markdown 笔记</span>
           </button>
           <button class="sf-btn sf-btn-secondary sf-btn-large" id="sf-btn-open-settings">添加飞书资料库</button>
+          <button class="sf-interop-strip" data-action="open-interop">
+            <span class="sf-interop-icon">
+              ${this.createSVGIcon('arrowLeftRight', 16)}
+            </span>
+            <span class="sf-interop-copy">
+              <span class="sf-interop-title">Notion 与飞书同步</span>
+              <span class="sf-interop-desc">迁移 Notion 资料，或与飞书双向同步</span>
+            </span>
+            ${this.createSVGIcon('chevronRight', 16)}
+          </button>
         </div>
       `;
     }
@@ -669,6 +685,16 @@ class FloatingPanel {
           <span>点击表格选择，使用箭头调整顺序</span>
         </div>
         <div class="sf-markdown-action">
+          <button class="sf-interop-strip" data-action="open-interop">
+            <span class="sf-interop-icon">
+              ${this.createSVGIcon('arrowLeftRight', 16)}
+            </span>
+            <span class="sf-interop-copy">
+              <span class="sf-interop-title">Notion 与飞书同步</span>
+              <span class="sf-interop-desc">迁移 Notion 资料，或与飞书双向同步</span>
+            </span>
+            ${this.createSVGIcon('chevronRight', 16)}
+          </button>
           <button class="sf-btn sf-btn-secondary sf-btn-large sf-btn-markdown" id="sf-btn-save-markdown" ${!this.content ? 'disabled' : ''}>
             ${this.createSVGIcon('download', 18)}
             <span>仅保存 markdown 到电脑</span>
@@ -893,6 +919,13 @@ class FloatingPanel {
     this.panel.querySelector('#sf-btn-open-settings')?.addEventListener('click', (e) => {
       e.stopPropagation();
       chrome.runtime.sendMessage({ action: 'openOptions' });
+    });
+
+    this.panel.querySelectorAll('[data-action="open-interop"], #sf-btn-open-interop-header').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        chrome.runtime.sendMessage({ action: 'openInteropOptions' });
+      });
     });
 
     // 返回按钮
