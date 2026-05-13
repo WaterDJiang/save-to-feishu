@@ -287,6 +287,49 @@
   line-height: var(--leading-relaxed);
 }
 
+.save-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.interop-direction-grid {
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: var(--space-6);
+}
+
+.save-mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--gray-50);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.save-mode-card:hover,
+.save-mode-card.active {
+  background: var(--primary-50);
+  border-color: var(--primary-300);
+  box-shadow: var(--shadow-sm);
+}
+
+.save-mode-title {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.save-mode-desc {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+}
+
 /* ===== 表单样式 ===== */
 .form-row {
   display: flex;
@@ -601,6 +644,63 @@
 }
 
 /* ===== 字段映射区域 ===== */
+.template-section {
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-light);
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 160px;
+  padding: var(--space-4);
+  background: var(--gray-50);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.template-card:hover:not(:disabled),
+.template-card.active {
+  background: var(--primary-50);
+  border-color: var(--primary-300);
+  box-shadow: var(--shadow-sm);
+}
+
+.template-card:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.template-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.template-desc,
+.template-fields {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+.template-fields {
+  margin-top: auto;
+  color: var(--primary-700);
+}
+
 .field-mapping-section {
   margin-top: var(--space-6);
   padding-top: var(--space-6);
@@ -680,6 +780,45 @@
 
 .field-actions .static-value {
   max-width: 200px;
+}
+
+.interop-targets {
+  align-items: start;
+}
+
+.interop-targets .form-group {
+  gap: var(--space-3);
+}
+
+.interop-mapping-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.interop-mapping-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--gray-50);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+}
+
+.interop-row-icon {
+  color: var(--text-tertiary);
+}
+
+.interop-remove-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.interop-add-btn {
+  margin-top: var(--space-3);
 }
 
 /* ===== 复选框样式 ===== */
@@ -767,6 +906,14 @@
   .config-grid.two-col {
     grid-template-columns: 1fr;
   }
+
+  .template-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .save-mode-grid {
+    grid-template-columns: 1fr;
+  }
   
   .form-row.two-col {
     grid-template-columns: 1fr;
@@ -792,5 +939,13 @@
   .field-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .interop-mapping-row {
+    grid-template-columns: 1fr;
+  }
+
+  .interop-row-icon {
+    display: none;
   }
 }

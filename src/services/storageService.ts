@@ -1,8 +1,8 @@
-import type { AppConfig, TableConfig, FeishuCredentials } from '@/types';
+import type { AppConfig, TableConfig, FeishuCredentials, NotionCredentials, SaveMode, InteropConfig } from '@/types';
 import { saveEncryptedToStorage, loadEncryptedFromStorage, clearEncryptedStorage } from '@/utils/encryption';
 import { parseAndValidateConfig, repairConfig } from '@/utils/validator';
 
-const CONFIG_VERSION = '1.0.0';
+const CONFIG_VERSION = '0.5.0';
 
 /**
  * 获取默认配置
@@ -13,7 +13,12 @@ function getDefaultConfig(): AppConfig {
       appId: '',
       appSecret: '',
     },
+    notion: {
+      integrationToken: '',
+    },
     tables: [],
+    interopConfigs: [],
+    saveMode: 'feishu',
     version: CONFIG_VERSION,
   };
 }
@@ -33,7 +38,16 @@ export async function loadConfig(): Promise<AppConfig> {
   if (!data) {
     return getDefaultConfig();
   }
-  return data as AppConfig;
+  return {
+    ...getDefaultConfig(),
+    ...(data as AppConfig),
+    notion: {
+      ...getDefaultConfig().notion,
+      ...((data as Partial<AppConfig>).notion || {}),
+    },
+    interopConfigs: (data as Partial<AppConfig>).interopConfigs || [],
+    saveMode: (data as Partial<AppConfig>).saveMode || 'feishu',
+  };
 }
 
 /**
@@ -51,6 +65,28 @@ export async function saveFeishuCredentials(credentials: FeishuCredentials): Pro
 export async function getFeishuCredentials(): Promise<FeishuCredentials> {
   const config = await loadConfig();
   return config.feishu;
+}
+
+export async function saveNotionCredentials(credentials: NotionCredentials): Promise<void> {
+  const config = await loadConfig();
+  config.notion = credentials;
+  await saveConfig(config);
+}
+
+export async function getNotionCredentials(): Promise<NotionCredentials> {
+  const config = await loadConfig();
+  return config.notion;
+}
+
+export async function saveSaveMode(saveMode: SaveMode): Promise<void> {
+  const config = await loadConfig();
+  config.saveMode = saveMode;
+  await saveConfig(config);
+}
+
+export async function getSaveMode(): Promise<SaveMode> {
+  const config = await loadConfig();
+  return config.saveMode || 'feishu';
 }
 
 /**
@@ -103,6 +139,32 @@ export async function saveTableConfigs(tables: TableConfig[]): Promise<void> {
   await saveConfig(config);
 }
 
+export async function getInteropConfigs(): Promise<InteropConfig[]> {
+  const config = await loadConfig();
+  return config.interopConfigs || [];
+}
+
+export async function saveInteropConfig(interopConfig: InteropConfig): Promise<void> {
+  const config = await loadConfig();
+  const configs = config.interopConfigs || [];
+  const index = configs.findIndex(item => item.id === interopConfig.id);
+
+  if (index >= 0) {
+    configs[index] = { ...interopConfig, updatedAt: Date.now() };
+  } else {
+    configs.push({ ...interopConfig, createdAt: Date.now(), updatedAt: Date.now() });
+  }
+
+  config.interopConfigs = configs;
+  await saveConfig(config);
+}
+
+export async function deleteInteropConfig(id: string): Promise<void> {
+  const config = await loadConfig();
+  config.interopConfigs = (config.interopConfigs || []).filter(item => item.id !== id);
+  await saveConfig(config);
+}
+
 /**
  * 导出配置为 JSON
  */
@@ -115,6 +177,10 @@ export async function exportConfig(includeSecret: boolean = false): Promise<stri
       feishu: {
         ...config.feishu,
         appSecret: '',
+      },
+      notion: {
+        ...config.notion,
+        integrationToken: '',
       },
     }, null, 2);
   }

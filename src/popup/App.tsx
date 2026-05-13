@@ -19,9 +19,13 @@ import {
   Clock,
   ExternalLink,
   Download,
+  Tags,
+  MessageSquare,
+  Inbox,
+  ArrowLeftRight,
 } from 'lucide-react';
-import type { ExtractedPageContent, TableConfig, SaveResult, HtmlElementInfo } from '@/types';
-import { getTableConfigs, saveTableConfigs } from '@/services/storageService';
+import type { ExtractedPageContent, TableConfig, SaveResult, HtmlElementInfo, KnowledgeMetadata, SaveMode } from '@/types';
+import { getSaveMode, getTableConfigs, saveTableConfigs } from '@/services/storageService';
 import { saveToFeishu } from '@/services/feishuService';
 import { generateMarkdown, generateMarkdownFilename, downloadMarkdown } from '@/utils/markdownGenerator';
 
@@ -57,7 +61,7 @@ function TableListItem({
       <button 
         className="sf-list-content" 
         onClick={onSelect}
-        aria-label={`选择表格 ${table.name}，包含 ${table.fieldMappings?.length || 0} 个字段`}
+        aria-label={`选择资料库 ${table.name}，已设置 ${table.fieldMappings?.length || 0} 个保存项`}
       >
         <div className="sf-list-icon" aria-hidden="true">
           <Database size={16} strokeWidth={1.5} />
@@ -65,7 +69,7 @@ function TableListItem({
         <div className="sf-list-info">
           <span className="sf-list-title">{table.name}</span>
           <span className="sf-list-subtitle">
-            {table.fieldMappings?.length || 0} 个字段
+            已设置 {table.fieldMappings?.length || 0} 个保存项
           </span>
         </div>
         <ChevronRight size={16} className="sf-list-chevron" strokeWidth={1.5} aria-hidden="true" />
@@ -119,6 +123,136 @@ function getTableUrl(table: TableConfig): string {
   return '';
 }
 
+function getDefaultSource(url: string): string {
+  return getHostname(url).replace(/^www\./, '');
+}
+
+function parseTags(value: string): string[] {
+  return value
+    .split(/[,，#\n]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function buildDefaultMetadata(content: ExtractedPageContent): KnowledgeMetadata {
+  return {
+    tags: [],
+    source: getDefaultSource(content.url),
+    status: '未处理',
+    excerpt: content.selectedText || content.description || '',
+    note: '',
+    reviewAt: '',
+  };
+}
+
+async function getHtmlElementsFromActiveTab(): Promise<HtmlElementInfo[] | undefined> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return undefined;
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      const selectors = [
+        '#js_content', 'article', '[role="main"]',
+        '.post-content', '.entry-content', '.article-content',
+        '.markdown-body', 'main', '.content', '#content',
+      ];
+      let html = '';
+      for (const selector of selectors) {
+        const el = document.querySelector(selector) as HTMLElement;
+        if (el && el.innerHTML?.trim().length > 50) {
+          html = el.innerHTML.trim();
+          break;
+        }
+      }
+      if (!html) html = document.body.innerHTML?.trim() || '';
+
+      const elements: Array<{
+        type: string;
+        content?: string;
+        level?: number;
+        imageUrl?: string;
+        listType?: string;
+        linkUrl?: string;
+      }> = [];
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const contentEl = doc.querySelector('body');
+      if (!contentEl) return elements;
+
+      const processed = new Set<Element>();
+      const process = (element: Element) => {
+        const tag = element.tagName.toLowerCase();
+        if (['script', 'style', 'noscript', 'iframe', 'svg'].includes(tag)) return;
+        if (processed.has(element)) return;
+
+        if (['h1', 'h2', 'h3'].includes(tag)) {
+          processed.add(element);
+          const text = element.textContent?.trim();
+          if (text) elements.push({ type: 'heading', content: text, level: tag === 'h1' ? 1 : tag === 'h2' ? 2 : 3 });
+          return;
+        }
+        if (tag === 'blockquote') {
+          processed.add(element);
+          const text = element.textContent?.trim();
+          if (text) elements.push({ type: 'quote', content: text });
+          return;
+        }
+        if (tag === 'img') {
+          processed.add(element);
+          const src = element.getAttribute('data-src') || element.getAttribute('data-original') || element.getAttribute('src');
+          if (src && !src.startsWith('data:')) {
+            const normalized = src.replace(/&amp;/g, '&').trim().replace(/^\/\//, 'https://');
+            if (!normalized.includes('icon') && !normalized.includes('avatar') && !normalized.includes('logo')) {
+              elements.push({ type: 'image', imageUrl: normalized });
+            }
+          }
+          return;
+        }
+        if (tag === 'ul' || tag === 'ol') {
+          processed.add(element);
+          element.querySelectorAll(':scope > li').forEach(li => {
+            processed.add(li);
+            const text = li.textContent?.trim();
+            if (text) elements.push({ type: 'list', content: text, listType: tag === 'ul' ? 'bullet' : 'ordered' });
+          });
+          return;
+        }
+        if (tag === 'li' && processed.has(element.parentElement!)) return;
+        if (tag === 'a') {
+          const href = element.getAttribute('href');
+          const text = element.textContent?.trim();
+          if (href && text) {
+            processed.add(element);
+            elements.push({ type: 'link', content: text, linkUrl: href });
+            return;
+          }
+        }
+        if (['p', 'div', 'section', 'article', 'main', 'pre'].includes(tag)) {
+          const children = element.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > blockquote, :scope > ul, :scope > ol, :scope > img, :scope > p, :scope > div');
+          if (children.length > 0) {
+            Array.from(element.children).forEach(process);
+          } else {
+            const text = element.textContent?.trim();
+            if (text) {
+              processed.add(element);
+              element.querySelectorAll('*').forEach(el => processed.add(el));
+              elements.push({ type: 'text', content: text });
+            }
+          }
+          return;
+        }
+        Array.from(element.children).forEach(process);
+      };
+      Array.from(contentEl.children).forEach(process);
+      return elements;
+    },
+  });
+
+  return results?.[0]?.result as HtmlElementInfo[] | undefined;
+}
+
 /**
  * 页面内容预览组件
  */
@@ -146,7 +280,89 @@ function ContentPreview({ content }: { content: ExtractedPageContent }) {
               <span>含图片</span>
             </div>
           )}
+          {content.selectedText && (
+            <div className="sf-meta-badge sf-meta-badge-selection">
+              <Inbox size={12} strokeWidth={1.5} />
+              <span>选中文本</span>
+            </div>
+          )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeFields({
+  metadata,
+  onChange,
+}: {
+  metadata: KnowledgeMetadata;
+  onChange: (metadata: KnowledgeMetadata) => void;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const tagsText = metadata.tags.length > 0 ? metadata.tags.join(', ') : '未加标签';
+
+  return (
+    <div className={`sf-knowledge-card ${isExpanded ? 'is-expanded' : ''}`}>
+      <div className="sf-knowledge-header">
+        <div>
+          <span className="sf-knowledge-label">整理信息</span>
+          <h3 className="sf-knowledge-title">自动归入 {metadata.status}</h3>
+          <p className="sf-knowledge-desc">
+            {metadata.source} · {tagsText}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="sf-knowledge-toggle"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {isExpanded ? '收起' : '补充'}
+        </button>
+      </div>
+
+      <div className="sf-knowledge-body">
+        <label className="sf-field">
+          <span><Tags size={13} strokeWidth={1.5} /> 标签</span>
+          <input
+            value={metadata.tags.join(', ')}
+            onChange={(event) => onChange({ ...metadata, tags: parseTags(event.target.value) })}
+            placeholder="行业研究, 内容素材"
+          />
+        </label>
+
+        <div className="sf-field-grid">
+          <label className="sf-field">
+            <span>状态</span>
+            <select
+              value={metadata.status}
+              onChange={(event) => onChange({ ...metadata, status: event.target.value })}
+            >
+              <option value="未处理">未处理</option>
+              <option value="待读">待读</option>
+              <option value="精读">精读</option>
+              <option value="已整理">已整理</option>
+            </select>
+          </label>
+          <label className="sf-field">
+            <span>下次回顾</span>
+            <input
+              type="date"
+              value={metadata.reviewAt || ''}
+              onChange={(event) => onChange({ ...metadata, reviewAt: event.target.value })}
+            />
+          </label>
+        </div>
+
+        <label className="sf-field">
+          <span><MessageSquare size={13} strokeWidth={1.5} /> 个人备注</span>
+          <textarea
+            value={metadata.note || ''}
+            onChange={(event) => onChange({ ...metadata, note: event.target.value })}
+            placeholder="为什么值得保存？后续准备用在哪里？"
+            rows={3}
+          />
+        </label>
       </div>
     </div>
   );
@@ -203,6 +419,8 @@ function PopupApp() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [metadata, setMetadata] = useState<KnowledgeMetadata | null>(null);
+  const [saveMode, setSaveMode] = useState<SaveMode>('feishu');
 
   /**
    * 提取页面内容
@@ -265,7 +483,8 @@ function PopupApp() {
           const description = getMetaContent('description', 'og:description') || '';
 
           // 正文内容：按优先级尝试常见选择器
-          const content =
+          const selectedText = window.getSelection()?.toString().trim().slice(0, 6000) || '';
+          const pageContent =
             getCleanText('#js_content') ||        // 微信公众号
             getCleanText('article') ||
             getCleanText('[role="main"]') ||
@@ -279,15 +498,24 @@ function PopupApp() {
           const mainImage = getMetaContent('', 'og:image') ||
             document.querySelector('article img, main img')?.getAttribute('src') || '';
 
-          return { title, url, description, content, mainImage };
+          return {
+            title,
+            url,
+            description,
+            content: selectedText || pageContent,
+            selectedText,
+            mainImage
+          };
         },
       });
 
       if (results?.[0]?.result) {
-        setContent({
+        const extracted = {
           ...results[0].result,
           savedAt: new Date().toISOString(),
-        });
+        };
+        setContent(extracted);
+        setMetadata(buildDefaultMetadata(extracted));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '提取内容失败');
@@ -303,6 +531,7 @@ function PopupApp() {
     try {
       const configs = await getTableConfigs();
       setTables(configs);
+      setSaveMode(await getSaveMode());
     } catch (err) {
       console.error('加载表格配置失败:', err);
     }
@@ -326,12 +555,34 @@ function PopupApp() {
     setSaveResult(null);
 
     try {
-      const result = await saveToFeishu(selectedTable, content);
-      setSaveResult(result);
+      const clipMetadata = metadata || buildDefaultMetadata(content);
+      const htmlElements = await getHtmlElementsFromActiveTab();
+      let result: SaveResult = { success: true };
+      if (saveMode !== 'markdown') {
+        result = await saveToFeishu(selectedTable, content, htmlElements, clipMetadata);
+      }
+      if (saveMode !== 'feishu') {
+        const markdown = generateMarkdown(content, htmlElements, {
+          metadata: clipMetadata,
+          documentUrl: result.documentUrl,
+        });
+        downloadMarkdown(markdown, generateMarkdownFilename(content.title));
+      }
+      setSaveResult(result.success ? result : {
+        ...result,
+        markdownFallback: true,
+        error: saveMode !== 'feishu'
+          ? `${result.error || '保存到飞书失败'}；已为你下载 Markdown 备份。`
+          : result.error,
+      });
     } catch (err) {
+      const clipMetadata = metadata || buildDefaultMetadata(content);
+      const markdown = generateMarkdown(content, undefined, { metadata: clipMetadata });
+      downloadMarkdown(markdown, generateMarkdownFilename(content.title));
       setSaveResult({
         success: false,
-        error: err instanceof Error ? err.message : '保存失败',
+        markdownFallback: true,
+        error: `${err instanceof Error ? err.message : '保存到飞书失败'}；已为你下载 Markdown 备份。`,
       });
     } finally {
       setIsSaving(false);
@@ -345,117 +596,18 @@ function PopupApp() {
     if (!content) return;
 
     try {
-      // 通过 content-script 提取 HTML 元素（popup 中没有 DOMParser）
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      let htmlElements: HtmlElementInfo[] | undefined;
-
-      if (tab?.id) {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: () => {
-            const selectors = [
-              '#js_content', 'article', '[role="main"]',
-              '.post-content', '.entry-content', '.article-content',
-              '.markdown-body', 'main', '.content', '#content',
-            ];
-            let html = '';
-            for (const selector of selectors) {
-              const el = document.querySelector(selector) as HTMLElement;
-              if (el && el.innerHTML?.trim().length > 50) {
-                html = el.innerHTML.trim();
-                break;
-              }
-            }
-            if (!html) html = document.body.innerHTML?.trim() || '';
-
-            // 解析 HTML 元素
-            const elements: Array<{
-              type: string;
-              content?: string;
-              level?: number;
-              imageUrl?: string;
-              listType?: string;
-              linkUrl?: string;
-            }> = [];
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const contentEl = doc.querySelector('body');
-            if (!contentEl) return elements;
-
-            const processed = new Set<Element>();
-            const process = (element: Element) => {
-              const tag = element.tagName.toLowerCase();
-              if (['script', 'style', 'noscript', 'iframe', 'svg'].includes(tag)) return;
-              if (processed.has(element)) return;
-
-              if (['h1', 'h2', 'h3'].includes(tag)) {
-                processed.add(element);
-                const text = element.textContent?.trim();
-                if (text) elements.push({ type: 'heading', content: text, level: tag === 'h1' ? 1 : tag === 'h2' ? 2 : 3 });
-                return;
-              }
-              if (tag === 'img') {
-                processed.add(element);
-                const src = element.getAttribute('data-src') || element.getAttribute('data-original') || element.getAttribute('src');
-                if (src && !src.startsWith('data:')) {
-                  const normalized = src.replace(/&amp;/g, '&').trim().replace(/^\/\//, 'https://');
-                  if (!normalized.includes('icon') && !normalized.includes('avatar') && !normalized.includes('logo')) {
-                    elements.push({ type: 'image', imageUrl: normalized });
-                  }
-                }
-                return;
-              }
-              if (tag === 'ul' || tag === 'ol') {
-                processed.add(element);
-                element.querySelectorAll(':scope > li').forEach(li => {
-                  processed.add(li);
-                  const text = li.textContent?.trim();
-                  if (text) elements.push({ type: 'list', content: text, listType: tag === 'ul' ? 'bullet' : 'ordered' });
-                });
-                return;
-              }
-              if (tag === 'li' && processed.has(element.parentElement!)) return;
-              if (tag === 'a') {
-                const href = element.getAttribute('href');
-                const text = element.textContent?.trim();
-                if (href && text) {
-                  processed.add(element);
-                  elements.push({ type: 'link', content: text, linkUrl: href });
-                  return;
-                }
-              }
-              if (['p', 'div', 'section', 'article', 'main', 'blockquote', 'pre'].includes(tag)) {
-                const children = element.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > ul, :scope > ol, :scope > img, :scope > p, :scope > div');
-                if (children.length > 0) {
-                  Array.from(element.children).forEach(process);
-                } else {
-                  const text = element.textContent?.trim();
-                  if (text) {
-                    processed.add(element);
-                    element.querySelectorAll('*').forEach(el => processed.add(el));
-                    elements.push({ type: 'text', content: text });
-                  }
-                }
-                return;
-              }
-              Array.from(element.children).forEach(process);
-            };
-            Array.from(contentEl.children).forEach(process);
-            return elements;
-          },
-        });
-        if (results?.[0]?.result) {
-          htmlElements = results[0].result as HtmlElementInfo[];
-        }
-      }
-
-      const markdown = generateMarkdown(content, htmlElements);
+      const htmlElements = await getHtmlElementsFromActiveTab();
+      const markdown = generateMarkdown(content, htmlElements, {
+        metadata: metadata || buildDefaultMetadata(content),
+      });
       const filename = generateMarkdownFilename(content.title);
       downloadMarkdown(markdown, filename);
     } catch (err) {
       console.error('保存 Markdown 失败:', err);
       // 降级：只使用纯文本内容
-      const markdown = generateMarkdown(content);
+      const markdown = generateMarkdown(content, undefined, {
+        metadata: metadata || buildDefaultMetadata(content),
+      });
       const filename = generateMarkdownFilename(content.title);
       downloadMarkdown(markdown, filename);
     }
@@ -483,7 +635,11 @@ function PopupApp() {
   /**
    * 打开设置页面
    */
-  const openOptions = () => {
+  const openOptions = (view?: 'interop') => {
+    if (view === 'interop') {
+      chrome.tabs.create({ url: chrome.runtime.getURL('options/index.html#interop') });
+      return;
+    }
     chrome.runtime.openOptionsPage();
   };
 
@@ -504,10 +660,31 @@ function PopupApp() {
           <div className="sf-empty-icon">
             <FolderOpen size={32} strokeWidth={1} />
           </div>
-          <h3 className="sf-empty-title">暂无保存目标</h3>
-          <p className="sf-empty-desc">请先添加飞书多维表格配置</p>
-          <button className="sf-btn sf-btn-primary" onClick={openOptions}>
-            前往设置
+          <h3 className="sf-empty-title">先保存成笔记文件</h3>
+          <p className="sf-empty-desc">还没连接飞书也没关系，可以先把当前网页整理成一份 Markdown 笔记。</p>
+          <button
+            className="sf-btn sf-btn-primary sf-btn-large"
+            onClick={handleSaveAsMarkdown}
+            disabled={!content}
+          >
+            <Download size={18} strokeWidth={1.5} />
+            <span>保存到电脑</span>
+          </button>
+          <button className="sf-btn sf-btn-secondary sf-btn-large" onClick={() => openOptions()}>
+            连接飞书资料库
+          </button>
+          <button
+            className="sf-interop-card"
+            onClick={() => openOptions('interop')}
+          >
+            <span className="sf-interop-icon">
+              <ArrowLeftRight size={18} strokeWidth={1.5} />
+            </span>
+            <span className="sf-interop-copy">
+              <span className="sf-interop-title">Notion 与飞书同步</span>
+              <span className="sf-interop-desc">将一侧资料同步到另一侧</span>
+            </span>
+            <ChevronRight size={16} strokeWidth={1.5} />
           </button>
         </div>
       );
@@ -516,7 +693,7 @@ function PopupApp() {
     return (
       <div className="sf-list-page">
         <div className="sf-list-header">
-          <span className="sf-list-label">选择保存位置</span>
+          <span className="sf-list-label">选择要保存到哪里</span>
           <span className="sf-badge">{tables.length}</span>
         </div>
         <div className="sf-list-container">
@@ -534,16 +711,29 @@ function PopupApp() {
         </div>
         <div className="sf-list-footer">
           <Clock size={12} strokeWidth={1.5} />
-          <span>点击表格选择，使用箭头调整顺序</span>
+          <span>点一个资料库开始保存，箭头可以调整常用顺序</span>
         </div>
         <div className="sf-markdown-action">
+          <button
+            className="sf-interop-card"
+            onClick={() => openOptions('interop')}
+          >
+            <span className="sf-interop-icon">
+              <ArrowLeftRight size={18} strokeWidth={1.5} />
+            </span>
+            <span className="sf-interop-copy">
+              <span className="sf-interop-title">Notion 与飞书同步</span>
+              <span className="sf-interop-desc">将一侧资料同步到另一侧</span>
+            </span>
+            <ChevronRight size={16} strokeWidth={1.5} />
+          </button>
           <button
             className="sf-btn sf-btn-secondary sf-btn-large sf-btn-markdown"
             onClick={handleSaveAsMarkdown}
             disabled={!content}
           >
             <Download size={18} strokeWidth={1.5} />
-            <span>仅保存 markdown 到电脑</span>
+            <span>只保存到电脑</span>
           </button>
         </div>
       </div>
@@ -584,16 +774,16 @@ function PopupApp() {
                 window.open(tableUrl, '_blank');
               } else {
                 console.error('[Popup] 无法生成表格链接');
-                alert('无法打开表格：缺少必要的表格信息 (tableUrl 或 appToken + tableId)');
+                alert('无法打开表格：请先在设置页重新粘贴一次飞书表格链接');
               }
             }}
-            title="点击打开多维表格"
+            title="点击打开飞书表格"
           >
             <div className="sf-target-icon">
               <Database size={20} strokeWidth={1.5} />
             </div>
             <div className="sf-target-info">
-              <span className="sf-target-label">保存到 · 点击打开表格</span>
+              <span className="sf-target-label">保存到这里 · 点击可打开</span>
               <span className="sf-target-name">{selectedTable.name}</span>
             </div>
             <ExternalLink size={16} strokeWidth={1.5} className="sf-target-link-icon" />
@@ -602,8 +792,29 @@ function PopupApp() {
           {/* 页面内容预览 */}
           <ContentPreview content={content} />
 
+          {metadata && (
+            <KnowledgeFields
+              metadata={metadata}
+              onChange={setMetadata}
+            />
+          )}
+
           {/* 保存结果提示 */}
           {saveResult && <SaveResultAlert result={saveResult} />}
+
+          <button
+            className="sf-interop-card sf-interop-card-compact"
+            onClick={() => openOptions('interop')}
+          >
+            <span className="sf-interop-icon">
+              <ArrowLeftRight size={18} strokeWidth={1.5} />
+            </span>
+            <span className="sf-interop-copy">
+              <span className="sf-interop-title">同步到 Notion</span>
+              <span className="sf-interop-desc">前往设置页配置 Notion 与飞书同步</span>
+            </span>
+            <ChevronRight size={16} strokeWidth={1.5} />
+          </button>
         </div>
 
         {/* 保存按钮 */}
@@ -616,10 +827,10 @@ function PopupApp() {
             }}
             disabled={!hasTableUrl}
             className="sf-btn sf-btn-secondary sf-btn-large"
-            title={hasTableUrl ? '打开多维表格' : '请先在设置页配置表格链接'}
+            title={hasTableUrl ? '打开飞书表格' : '请先在设置页粘贴飞书表格链接'}
           >
             <ExternalLink size={18} strokeWidth={1.5} />
-            <span>一键打开飞书表格</span>
+            <span>打开飞书表格</span>
           </button>
           <button
             onClick={handleSave}
@@ -634,7 +845,13 @@ function PopupApp() {
             ) : (
               <>
                 <Save size={18} strokeWidth={1.5} />
-                <span>保存到飞书</span>
+                <span>
+                  {saveMode === 'both'
+                    ? '保存到飞书，也存一份到电脑'
+                    : saveMode === 'markdown'
+                      ? '保存到电脑'
+                      : '保存到飞书'}
+                </span>
               </>
             )}
           </button>
@@ -654,7 +871,7 @@ function PopupApp() {
             className="sf-logo"
           />
           <span className="sf-header-title">
-            {selectedTable ? '确认保存' : 'Save to Feishu'}
+            {selectedTable ? '确认后保存' : '保存当前网页'}
           </span>
         </div>
         <div className="sf-header-actions">
@@ -668,7 +885,7 @@ function PopupApp() {
           </button>
           <button 
             className="sf-header-btn" 
-            onClick={openOptions}
+            onClick={() => openOptions()}
             title="设置"
           >
             <Settings size={14} strokeWidth={1.5} />

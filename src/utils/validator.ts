@@ -3,7 +3,7 @@
  * 用于运行时验证导入的配置数据
  */
 
-import type { AppConfig, TableConfig, FeishuCredentials } from '@/types';
+import type { AppConfig, TableConfig, FeishuCredentials, NotionCredentials, InteropConfig } from '@/types';
 
 /**
  * 验证飞书凭证对象
@@ -15,6 +15,12 @@ export function isValidFeishuCredentials(obj: any): obj is FeishuCredentials {
          typeof obj === 'object' &&
          typeof obj.appId === 'string' &&
          typeof obj.appSecret === 'string';
+}
+
+export function isValidNotionCredentials(obj: any): obj is NotionCredentials {
+  return obj !== null &&
+         typeof obj === 'object' &&
+         typeof obj.integrationToken === 'string';
 }
 
 /**
@@ -35,6 +41,21 @@ export function isValidTableConfig(obj: any): obj is TableConfig {
          typeof obj.updatedAt === 'number';
 }
 
+export function isValidInteropConfig(obj: any): obj is InteropConfig {
+  return obj !== null &&
+         typeof obj === 'object' &&
+         typeof obj.id === 'string' &&
+         typeof obj.name === 'string' &&
+         ['notion-to-feishu', 'feishu-to-notion'].includes(obj.direction) &&
+         typeof obj.notionDatabaseId === 'string' &&
+         typeof obj.feishuAppToken === 'string' &&
+         typeof obj.feishuTableId === 'string' &&
+         Array.isArray(obj.mappings) &&
+         typeof obj.limit === 'number' &&
+         typeof obj.createdAt === 'number' &&
+         typeof obj.updatedAt === 'number';
+}
+
 /**
  * 验证应用配置对象
  * @param obj - 待验证对象
@@ -44,8 +65,12 @@ export function isValidAppConfig(obj: any): obj is AppConfig {
   return obj !== null &&
          typeof obj === 'object' &&
          isValidFeishuCredentials(obj.feishu) &&
+         isValidNotionCredentials(obj.notion || { integrationToken: '' }) &&
          Array.isArray(obj.tables) &&
          obj.tables.every(isValidTableConfig) &&
+         Array.isArray(obj.interopConfigs || []) &&
+         (obj.interopConfigs || []).every(isValidInteropConfig) &&
+         ['both', 'feishu', 'markdown', undefined].includes(obj.saveMode) &&
          typeof obj.version === 'string';
 }
 
@@ -89,6 +114,14 @@ export function repairConfig(obj: any): AppConfig | null {
         appSecret: String(obj.feishu.appSecret || ''),
       };
     }
+
+    if (!obj.notion || typeof obj.notion !== 'object') {
+      obj.notion = { integrationToken: '' };
+    } else {
+      obj.notion = {
+        integrationToken: String(obj.notion.integrationToken || ''),
+      };
+    }
     
     // 修复 tables 字段
     if (!Array.isArray(obj.tables)) {
@@ -105,15 +138,43 @@ export function repairConfig(obj: any): AppConfig | null {
         appToken: String(table.appToken || ''),
         tableId: String(table.tableId || ''),
         tableUrl: String(table.tableUrl || ''),
+        templateId: typeof table.templateId === 'string' ? table.templateId : undefined,
         fieldMappings: Array.isArray(table.fieldMappings) ? table.fieldMappings : [],
         createdAt: Number(table.createdAt) || Date.now(),
         updatedAt: Number(table.updatedAt) || Date.now(),
       }));
     }
+
+    if (!Array.isArray(obj.interopConfigs)) {
+      obj.interopConfigs = [];
+    } else {
+      obj.interopConfigs = obj.interopConfigs.filter((item: any) => {
+        return item &&
+               typeof item.id === 'string' &&
+               typeof item.name === 'string';
+      }).map((item: any) => ({
+        id: String(item.id),
+        name: String(item.name),
+        direction: item.direction === 'feishu-to-notion' ? 'feishu-to-notion' : 'notion-to-feishu',
+        notionDatabaseId: String(item.notionDatabaseId || ''),
+        feishuAppToken: String(item.feishuAppToken || ''),
+        feishuTableId: String(item.feishuTableId || ''),
+        feishuTableUrl: typeof item.feishuTableUrl === 'string' ? item.feishuTableUrl : '',
+        mappings: Array.isArray(item.mappings) ? item.mappings : [],
+        limit: Number(item.limit) || 20,
+        lastSyncAt: typeof item.lastSyncAt === 'number' ? item.lastSyncAt : undefined,
+        createdAt: Number(item.createdAt) || Date.now(),
+        updatedAt: Number(item.updatedAt) || Date.now(),
+      }));
+    }
+
+    if (!['both', 'feishu', 'markdown'].includes(obj.saveMode)) {
+      obj.saveMode = 'feishu';
+    }
     
     // 修复 version 字段
     if (typeof obj.version !== 'string') {
-      obj.version = '1.0.0';
+      obj.version = '0.5.0';
     }
     
     // 再次验证

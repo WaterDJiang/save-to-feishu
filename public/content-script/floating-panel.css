@@ -553,6 +553,119 @@
   border-radius: 4px;
 }
 
+.sf-meta-badge-selection {
+  background: rgba(255, 149, 0, 0.12);
+  color: #ff9500;
+}
+
+.sf-knowledge-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 14px;
+}
+
+.sf-knowledge-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sf-knowledge-label {
+  display: block;
+  margin-bottom: 2px;
+  color: #86868b;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.sf-knowledge-title {
+  color: #1d1d1f;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.sf-knowledge-desc {
+  margin-top: 3px;
+  color: #6e6e73;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.sf-knowledge-toggle {
+  padding: 4px 8px;
+  color: #b35f00;
+  background: rgba(255, 149, 0, 0.12);
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sf-knowledge-toggle:hover {
+  background: rgba(255, 149, 0, 0.18);
+}
+
+.sf-knowledge-body {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sf-knowledge-card.is-expanded .sf-knowledge-body {
+  display: flex;
+}
+
+.sf-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.sf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #6e6e73;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sf-field input,
+.sf-field select,
+.sf-field textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  color: #1d1d1f;
+  background: #f5f5f7;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  font: inherit;
+  outline: none;
+}
+
+.sf-field textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.sf-field input:focus,
+.sf-field select:focus,
+.sf-field textarea:focus {
+  border-color: #0071e3;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+}
+
 /* 提示 */
 .sf-alert {
   display: flex;

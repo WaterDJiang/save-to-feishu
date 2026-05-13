@@ -1,4 +1,4 @@
-import type { ExtractedPageContent, TableConfig, SaveResult, HtmlElementInfo } from '@/types';
+import type { ExtractedPageContent, TableConfig, SaveResult, HtmlElementInfo, KnowledgeMetadata, SaveMode } from '@/types';
 
 /**
  * 从 meta 标签获取内容
@@ -271,8 +271,20 @@ function parseHtmlToElements(html: string): HtmlElementInfo[] {
       }
 
       // 处理段落和块级元素
-      if (['p', 'div', 'section', 'article', 'main', 'blockquote', 'pre'].includes(tagName)) {
-        const childBlocks = element.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > ul, :scope > ol, :scope > img, :scope > p, :scope > div, :scope > article, :scope > section');
+      if (tagName === 'blockquote') {
+        processedElements.add(element);
+        const text = element.textContent?.trim();
+        if (text) {
+          elements.push({
+            type: 'quote',
+            content: text,
+          });
+        }
+        return;
+      }
+
+      if (['p', 'div', 'section', 'article', 'main', 'pre'].includes(tagName)) {
+        const childBlocks = element.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > blockquote, :scope > ul, :scope > ol, :scope > img, :scope > p, :scope > div, :scope > article, :scope > section');
 
         if (childBlocks.length > 0) {
           Array.from(element.children).forEach(child => {
@@ -318,7 +330,8 @@ function extractPageContent(): ExtractedPageContent {
   const url = window.location.href;
   const description = getMetaContent('description', 'og:description') || '';
   const mainImage = extractMainImage();
-  const content = extractMainContent();
+  const selectedText = window.getSelection()?.toString().trim().slice(0, 6000) || '';
+  const content = selectedText || extractMainContent();
   const publishedAt = extractPublishDate();
 
   return {
@@ -327,6 +340,7 @@ function extractPageContent(): ExtractedPageContent {
     description,
     mainImage: mainImage || undefined,
     content,
+    selectedText: selectedText || undefined,
     publishedAt: publishedAt || undefined,
     savedAt: new Date().toISOString(),
   };
@@ -339,6 +353,14 @@ async function getTableConfigs(): Promise<TableConfig[]> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ action: 'getTableConfigs' }, (response) => {
       resolve(response?.tables || []);
+    });
+  });
+}
+
+async function getSaveMode(): Promise<SaveMode> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'getSaveMode' }, (response) => {
+      resolve(response?.saveMode || 'feishu');
     });
   });
 }
@@ -357,10 +379,15 @@ async function saveTableConfigs(tables: TableConfig[]): Promise<void> {
 /**
  * 通过 background 保存到飞书
  */
-async function saveToFeishu(table: TableConfig, content: ExtractedPageContent, htmlElements?: HtmlElementInfo[]): Promise<SaveResult> {
+async function saveToFeishu(
+  table: TableConfig,
+  content: ExtractedPageContent,
+  htmlElements?: HtmlElementInfo[],
+  metadata?: KnowledgeMetadata
+): Promise<SaveResult> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
-      { action: 'saveToFeishu', table, content, htmlElements },
+      { action: 'saveToFeishu', table, content, htmlElements, metadata },
       (response) => {
         resolve(response || { success: false, error: '保存失败' });
       }
@@ -375,6 +402,8 @@ class FloatingPanel {
   private panel: HTMLElement | null = null;
   private shadowRoot: ShadowRoot | null = null;
   private content: ExtractedPageContent | null = null;
+  private metadata: KnowledgeMetadata | null = null;
+  private saveMode: SaveMode = 'feishu';
   private tables: TableConfig[] = [];
   private selectedTable: TableConfig | null = null;
 
@@ -444,10 +473,12 @@ class FloatingPanel {
 
     // 提取页面内容
     this.content = extractPageContent();
+    this.metadata = this.buildDefaultMetadata(this.content);
 
     // 加载表格配置
     try {
       this.tables = await getTableConfigs();
+      this.saveMode = await getSaveMode();
     } catch (e) {
       console.error('加载表格配置失败:', e);
       this.tables = [];
@@ -558,7 +589,7 @@ class FloatingPanel {
    * 渲染标题栏
    */
   private renderHeader(): string {
-    const title = this.selectedTable ? '确认保存' : 'Save to Feishu';
+    const title = this.selectedTable ? '整理后保存' : '网页知识剪藏';
     return `
       <div class="sf-panel-header">
         <div class="sf-panel-brand">
@@ -591,8 +622,12 @@ class FloatingPanel {
             ${this.createSVGIcon('folderOpen', 28)}
           </div>
           <h3 class="sf-empty-title">暂无保存目标</h3>
-          <p class="sf-empty-desc">请先添加飞书多维表格配置</p>
-          <button class="sf-btn sf-btn-primary" id="sf-btn-open-settings">前往设置</button>
+          <p class="sf-empty-desc">无需配置飞书，也可以先保存结构化 Markdown 笔记。</p>
+          <button class="sf-btn sf-btn-primary sf-btn-large" id="sf-btn-save-markdown" ${!this.content ? 'disabled' : ''}>
+            ${this.createSVGIcon('download', 18)}
+            <span>保存 Markdown 笔记</span>
+          </button>
+          <button class="sf-btn sf-btn-secondary sf-btn-large" id="sf-btn-open-settings">添加飞书资料库</button>
         </div>
       `;
     }
@@ -623,7 +658,7 @@ class FloatingPanel {
     return `
       <div class="sf-list-page">
         <div class="sf-list-header">
-          <span class="sf-list-label">选择保存位置</span>
+          <span class="sf-list-label">选择知识库出口</span>
           <span class="sf-badge">${this.tables.length}</span>
         </div>
         <div class="sf-list-container">
@@ -656,6 +691,54 @@ class FloatingPanel {
     }
   }
 
+  private parseTags(value: string): string[] {
+    return value
+      .split(/[,，#\n]/)
+      .map(tag => tag.trim())
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+
+  private buildDefaultMetadata(content: ExtractedPageContent): KnowledgeMetadata {
+    return {
+      tags: [],
+      source: this.getHostname(content.url).replace(/^www\./, ''),
+      status: '未处理',
+      excerpt: content.selectedText || content.description || '',
+      note: '',
+      reviewAt: '',
+    };
+  }
+
+  private readMetadataFromPanel(): KnowledgeMetadata {
+    if (!this.content) {
+      return {
+        tags: [],
+        source: '',
+        status: '未处理',
+        excerpt: '',
+        note: '',
+        reviewAt: '',
+      };
+    }
+
+    const fallback = this.metadata || this.buildDefaultMetadata(this.content);
+    const tagsInput = this.panel?.querySelector<HTMLInputElement>('#sf-knowledge-tags');
+    const statusInput = this.panel?.querySelector<HTMLSelectElement>('#sf-knowledge-status');
+    const noteInput = this.panel?.querySelector<HTMLTextAreaElement>('#sf-knowledge-note');
+    const reviewInput = this.panel?.querySelector<HTMLInputElement>('#sf-knowledge-review');
+
+    this.metadata = {
+      ...fallback,
+      tags: this.parseTags(tagsInput?.value || ''),
+      status: statusInput?.value || fallback.status,
+      note: noteInput?.value || '',
+      reviewAt: reviewInput?.value || '',
+    };
+
+    return this.metadata;
+  }
+
   private getTableUrl(table: TableConfig): string {
     if (table?.tableUrl && table.tableUrl.trim()) {
       return table.tableUrl.trim();
@@ -674,6 +757,12 @@ class FloatingPanel {
 
     const hostname = this.getHostname(this.content.url);
     const tableUrl = this.getTableUrl(this.selectedTable);
+    const metadata = this.metadata || this.buildDefaultMetadata(this.content);
+    const saveButtonText = this.saveMode === 'both'
+      ? '保存到飞书并下载 Markdown'
+      : this.saveMode === 'markdown'
+        ? '下载 Markdown 笔记'
+        : '保存到飞书';
 
     return `
       <div class="sf-save-page">
@@ -713,7 +802,50 @@ class FloatingPanel {
                   <span>含图片</span>
                 </div>
               ` : ''}
+              ${this.content.selectedText ? `
+                <div class="sf-meta-badge sf-meta-badge-selection">
+                  <span>选中文本</span>
+                </div>
+              ` : ''}
             </div>
+          </div>
+        </div>
+
+        <div class="sf-knowledge-card">
+          <div class="sf-knowledge-header">
+            <div>
+              <span class="sf-knowledge-label">整理信息</span>
+              <h3 class="sf-knowledge-title">自动归入 ${this.escapeHtml(metadata.status)}</h3>
+              <p class="sf-knowledge-desc">${this.escapeHtml(metadata.source)} · ${metadata.tags.length ? this.escapeHtml(metadata.tags.join(', ')) : '未加标签'}</p>
+            </div>
+            <button class="sf-knowledge-toggle" id="sf-knowledge-toggle" type="button">补充</button>
+          </div>
+
+          <div class="sf-knowledge-body">
+            <label class="sf-field">
+              <span>标签</span>
+              <input id="sf-knowledge-tags" value="${this.escapeHtml(metadata.tags.join(', '))}" placeholder="行业研究, 内容素材">
+            </label>
+
+            <div class="sf-field-grid">
+              <label class="sf-field">
+                <span>状态</span>
+                <select id="sf-knowledge-status">
+                  ${['未处理', '待读', '精读', '已整理'].map(status => `
+                    <option value="${status}" ${metadata.status === status ? 'selected' : ''}>${status}</option>
+                  `).join('')}
+                </select>
+              </label>
+              <label class="sf-field">
+                <span>下次回顾</span>
+                <input id="sf-knowledge-review" type="date" value="${this.escapeHtml(metadata.reviewAt || '')}">
+              </label>
+            </div>
+
+            <label class="sf-field">
+              <span>个人备注</span>
+              <textarea id="sf-knowledge-note" rows="3" placeholder="为什么值得保存？后续准备用在哪里？">${this.escapeHtml(metadata.note || '')}</textarea>
+            </label>
           </div>
         </div>
 
@@ -724,7 +856,7 @@ class FloatingPanel {
           </button>
           <button class="sf-btn sf-btn-primary sf-btn-large" id="sf-btn-save">
             ${this.createSVGIcon('save', 18)}
-            <span>保存到飞书</span>
+            <span>${saveButtonText}</span>
           </button>
         </div>
       </div>
@@ -747,6 +879,7 @@ class FloatingPanel {
     this.panel.querySelector('#sf-btn-refresh')?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.content = extractPageContent();
+      this.metadata = this.buildDefaultMetadata(this.content);
       this.render();
     });
 
@@ -782,6 +915,14 @@ class FloatingPanel {
       if (tableUrl) {
         window.open(tableUrl, '_blank');
       }
+    });
+
+    this.panel.querySelector('#sf-knowledge-toggle')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const card = this.panel?.querySelector('.sf-knowledge-card');
+      const button = e.currentTarget as HTMLButtonElement;
+      const isExpanded = card?.classList.toggle('is-expanded') || false;
+      button.textContent = isExpanded ? '收起' : '补充';
     });
 
     // 表格选择
@@ -853,12 +994,30 @@ class FloatingPanel {
       const htmlElements = parseHtmlToElements(html);
       console.log('[ContentScript] 解析完成，共', htmlElements.length, '个元素');
 
-      const result = await saveToFeishu(this.selectedTable, this.content, htmlElements);
-      this.showResult(result);
+      const metadata = this.readMetadataFromPanel();
+      let result: SaveResult = { success: true };
+      if (this.saveMode !== 'markdown') {
+        result = await saveToFeishu(this.selectedTable, this.content, htmlElements, metadata);
+      }
+      if (this.saveMode !== 'feishu') {
+        const markdown = this.buildMarkdown(this.content, htmlElements, metadata, result.documentUrl);
+        this.triggerDownload(markdown, this.buildMarkdownFilename(this.content.title));
+      }
+      this.showResult(result.success ? result : {
+        ...result,
+        markdownFallback: true,
+        error: this.saveMode !== 'feishu'
+          ? `${result.error || '保存到飞书失败'}；已为你下载 Markdown 备份。`
+          : result.error,
+      });
     } catch (err) {
+      const metadata = this.readMetadataFromPanel();
+      const markdown = this.buildMarkdown(this.content, undefined, metadata);
+      this.triggerDownload(markdown, this.buildMarkdownFilename(this.content.title));
       this.showResult({
         success: false,
-        error: err instanceof Error ? err.message : '保存失败',
+        markdownFallback: true,
+        error: `${err instanceof Error ? err.message : '保存到飞书失败'}；已为你下载 Markdown 备份。`,
       });
     }
   }
@@ -872,12 +1031,12 @@ class FloatingPanel {
     try {
       const html = extractPageHtml();
       const htmlElements = parseHtmlToElements(html);
-      const markdown = this.buildMarkdown(this.content, htmlElements);
+      const markdown = this.buildMarkdown(this.content, htmlElements, this.metadata || this.buildDefaultMetadata(this.content));
       const filename = this.buildMarkdownFilename(this.content.title);
       this.triggerDownload(markdown, filename);
     } catch (err) {
       // 降级：只使用纯文本内容
-      const markdown = this.buildMarkdown(this.content);
+      const markdown = this.buildMarkdown(this.content, undefined, this.metadata || this.buildDefaultMetadata(this.content));
       const filename = this.buildMarkdownFilename(this.content.title);
       this.triggerDownload(markdown, filename);
     }
@@ -886,8 +1045,33 @@ class FloatingPanel {
   /**
    * 构建结构化 Markdown 内容
    */
-  private buildMarkdown(content: ExtractedPageContent, htmlElements?: HtmlElementInfo[]): string {
+  private buildMarkdown(
+    content: ExtractedPageContent,
+    htmlElements?: HtmlElementInfo[],
+    metadata?: KnowledgeMetadata,
+    documentUrl?: string
+  ): string {
     const lines: string[] = [];
+    const clipMetadata = metadata || this.buildDefaultMetadata(content);
+
+    lines.push('---');
+    lines.push(`title: ${this.renderYamlValue(content.title)}`);
+    lines.push(`url: ${this.renderYamlValue(content.url)}`);
+    lines.push(`source: ${this.renderYamlValue(clipMetadata.source || this.getHostname(content.url))}`);
+    lines.push(`saved_at: ${this.renderYamlValue(content.savedAt)}`);
+    if (content.publishedAt) lines.push(`published_at: ${this.renderYamlValue(content.publishedAt)}`);
+    if (documentUrl) lines.push(`feishu_doc_url: ${this.renderYamlValue(documentUrl)}`);
+    lines.push(`status: ${this.renderYamlValue(clipMetadata.status || '未处理')}`);
+    if (clipMetadata.reviewAt) lines.push(`review_at: ${this.renderYamlValue(clipMetadata.reviewAt)}`);
+    if (clipMetadata.tags.length > 0) {
+      lines.push('tags:');
+      clipMetadata.tags.forEach(tag => lines.push(`  - ${this.renderYamlValue(tag)}`));
+    } else {
+      lines.push('tags: []');
+    }
+    if (clipMetadata.excerpt) lines.push(`excerpt: ${this.renderYamlValue(clipMetadata.excerpt)}`);
+    lines.push('---');
+    lines.push('');
 
     lines.push(`# ${content.title}`);
     lines.push('');
@@ -895,7 +1079,12 @@ class FloatingPanel {
     const metaLines: string[] = [];
     if (content.url) metaLines.push(`- **链接**: ${content.url}`);
     if (content.description) metaLines.push(`- **摘要**: ${content.description}`);
+    if (content.selectedText) metaLines.push('- **剪藏范围**: 选中文本');
     if (content.publishedAt) metaLines.push(`- **发布时间**: ${content.publishedAt}`);
+    if (clipMetadata.source) metaLines.push(`- **来源**: ${clipMetadata.source}`);
+    if (clipMetadata.status) metaLines.push(`- **状态**: ${clipMetadata.status}`);
+    if (clipMetadata.tags.length) metaLines.push(`- **标签**: ${clipMetadata.tags.join(', ')}`);
+    if (documentUrl) metaLines.push(`- **飞书文档**: ${documentUrl}`);
     metaLines.push(`- **保存时间**: ${content.savedAt}`);
 
     if (metaLines.length > 0) {
@@ -905,6 +1094,20 @@ class FloatingPanel {
 
     lines.push('---');
     lines.push('');
+
+    if (clipMetadata.note) {
+      lines.push('## 个人备注');
+      lines.push('');
+      lines.push(clipMetadata.note);
+      lines.push('');
+    }
+
+    if (clipMetadata.excerpt) {
+      lines.push('## 摘录');
+      lines.push('');
+      lines.push(`> ${clipMetadata.excerpt.replace(/\n+/g, '\n> ')}`);
+      lines.push('');
+    }
 
     if (htmlElements && htmlElements.length > 0) {
       let inList = false;
@@ -926,6 +1129,24 @@ class FloatingPanel {
             if (inList) { lines.push(''); inList = false; }
             lines.push(el.content || '');
             lines.push('');
+            orderedIndex = 0;
+            break;
+          }
+          case 'quote': {
+            if (inList) { lines.push(''); inList = false; }
+            if (el.content) {
+              lines.push(`> ${el.content.replace(/\n+/g, '\n> ')}`);
+              lines.push('');
+            }
+            orderedIndex = 0;
+            break;
+          }
+          case 'image': {
+            if (inList) { lines.push(''); inList = false; }
+            if (el.imageUrl) {
+              lines.push(`![${content.title}](${el.imageUrl})`);
+              lines.push('');
+            }
             orderedIndex = 0;
             break;
           }
@@ -971,6 +1192,11 @@ class FloatingPanel {
     }
 
     return lines.join('\n');
+  }
+
+  private renderYamlValue(value: string | undefined): string {
+    if (!value) return '""';
+    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
   }
 
   /**
@@ -1046,7 +1272,12 @@ class FloatingPanel {
     if (saveBtn) {
       saveBtn.classList.remove('is-saving');
       saveBtn.removeAttribute('disabled');
-      saveBtn.innerHTML = `${this.createSVGIcon('save', 18)}<span>保存到飞书</span>`;
+      const saveButtonText = this.saveMode === 'both'
+        ? '保存到飞书并下载 Markdown'
+        : this.saveMode === 'markdown'
+          ? '下载 Markdown 笔记'
+          : '保存到飞书';
+      saveBtn.innerHTML = `${this.createSVGIcon('save', 18)}<span>${saveButtonText}</span>`;
     }
   }
 

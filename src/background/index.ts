@@ -1,5 +1,5 @@
 import type { ExtractedPageContent, HtmlElementInfo } from '@/types';
-import { getTableConfigs, saveTableConfigs } from '@/services/storageService';
+import { getSaveMode, getTableConfigs, saveTableConfigs } from '@/services/storageService';
 import { saveToFeishu as feishuSaveToFeishu } from '@/services/feishuService';
 
 // 右键菜单 ID
@@ -21,6 +21,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse({ success: true });
   } else if (message.action === 'getLatestContent') {
     sendResponse({ content: latestContent });
+  } else if (message.action === 'getSaveMode') {
+    getSaveMode()
+      .then(saveMode => sendResponse({ saveMode }))
+      .catch(() => sendResponse({ saveMode: 'feishu' }));
+    return true;
   } else if (message.action === 'openOptionsPage' || message.action === 'openOptions') {
     chrome.runtime.openOptionsPage();
     sendResponse({ success: true });
@@ -47,7 +52,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       });
     return true;
   } else if (message.action === 'saveToFeishu') {
-    feishuSaveToFeishu(message.table, message.content, message.htmlElements)
+    feishuSaveToFeishu(message.table, message.content, message.htmlElements, message.metadata)
       .then(result => {
         sendResponse(result);
       })
@@ -223,7 +228,20 @@ async function handleDirectSave(tabId: number) {
     const htmlElements = htmlResults?.[0]?.result || [];
 
     // 4. 使用第一个表格保存
-    const result = await feishuSaveToFeishu(tables[0], content, htmlElements);
+    const result = await feishuSaveToFeishu(tables[0], content, htmlElements, {
+      tags: [],
+      source: (() => {
+        try {
+          return new URL(content.url).hostname;
+        } catch {
+          return content.url;
+        }
+      })(),
+      status: '未处理',
+      excerpt: content.description || '',
+      note: '',
+      reviewAt: '',
+    });
 
     // 5. 通知用户结果
     if (result.success) {

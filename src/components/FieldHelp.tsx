@@ -10,16 +10,16 @@ export const FIELD_HELP_CONTENT = {
   appId: {
     title: 'App ID',
     icon: '🔑',
-    description: '飞书开放平台应用的唯一标识符',
+    description: '飞书给插件的第 1 串钥匙',
     content: (
       <>
         <div className="field-help-section">
-          <h5 className="field-help-section-title">📋 什么是 App ID？</h5>
-          <p>App ID 是飞书开放平台为每个应用分配的唯一标识符，用于识别你的应用身份。插件通过 App ID 向飞书服务器请求访问权限。</p>
+          <h5 className="field-help-section-title">📋 这一项的作用</h5>
+          <p>App ID 是飞书给这个插件的第 1 串钥匙。填好后，飞书才知道是谁在请求保存资料。</p>
         </div>
 
         <div className="field-help-section">
-          <h5 className="field-help-section-title">🎯 获取步骤</h5>
+          <h5 className="field-help-section-title">🎯 如何获取</h5>
           <ol className="field-help-steps">
             <li>
               <span className="field-help-step-num">1</span>
@@ -39,7 +39,7 @@ export const FIELD_HELP_CONTENT = {
             </li>
             <li>
               <span className="field-help-step-num">5</span>
-              <span>复制 <strong>App ID</strong>（格式：cli_xxxxxxxxxxxxxxxx）</span>
+              <span>复制 <strong>App ID</strong>（通常以 cli_ 开头）</span>
             </li>
           </ol>
         </div>
@@ -53,7 +53,7 @@ export const FIELD_HELP_CONTENT = {
         </div>
 
         <div className="field-help-alert field-help-tip">
-          <strong>💡 提示：</strong>App ID 是公开信息，可以安全地分享。每个应用只有一个固定的 App ID。
+          <strong>💡 提示：</strong>App ID 通常不是最敏感的那串，但也建议只填在自己的插件里。
         </div>
       </>
     ),
@@ -61,16 +61,16 @@ export const FIELD_HELP_CONTENT = {
   appSecret: {
     title: 'App Secret',
     icon: '🔐',
-    description: '应用的密钥，用于生成访问令牌',
+    description: '飞书给插件的第 2 串钥匙',
     content: (
       <>
         <div className="field-help-section">
-          <h5 className="field-help-section-title">📋 什么是 App Secret？</h5>
-          <p>App Secret 是应用的密钥，相当于应用的"密码"。插件使用 App Secret 向飞书服务器证明身份，获取访问 API 的令牌。</p>
+          <h5 className="field-help-section-title">📋 这一项的作用</h5>
+          <p>App Secret 是飞书给插件的第 2 串钥匙，作用类似密码。插件靠它证明自己有资格把资料保存到你的飞书表格。</p>
         </div>
 
         <div className="field-help-section">
-          <h5 className="field-help-section-title">🎯 获取步骤</h5>
+          <h5 className="field-help-section-title">🎯 如何获取</h5>
           <ol className="field-help-steps">
             <li>
               <span className="field-help-step-num">1</span>
@@ -78,7 +78,7 @@ export const FIELD_HELP_CONTENT = {
             </li>
             <li>
               <span className="field-help-step-num">2</span>
-              <span>找到 <strong>App Secret</strong> 字段</span>
+              <span>找到 <strong>App Secret</strong> 这一项</span>
             </li>
             <li>
               <span className="field-help-step-num">3</span>
@@ -104,24 +104,24 @@ export const FIELD_HELP_CONTENT = {
         </div>
 
         <div className="field-help-alert field-help-warning">
-          <strong>⚠️ 安全警告：</strong>App Secret 是敏感信息，请勿泄露给他人！插件会加密存储此密钥。
+          <strong>⚠️ 安全提醒：</strong>App Secret 像密码一样，请不要发给别人。插件会加密保存在本地。
         </div>
 
         <div className="field-help-alert field-help-info">
-          <strong>🔄 重置密钥：</strong>如果怀疑密钥泄露，可以在飞书开放平台重置 App Secret。
+          <strong>🔄 如果不小心泄露：</strong>可以回到飞书开放平台重新生成 App Secret。
         </div>
       </>
     ),
   },
   tableUrl: {
-    title: '多维表格链接',
-    icon: '�',
-    description: '飞书多维表格的分享链接',
+    title: '飞书表格链接',
+    icon: '🔗',
+    description: '直接粘贴要保存到的飞书表格网址',
     content: (
       <>
         <div className="field-help-section">
           <h5 className="field-help-section-title">📋 如何使用？</h5>
-          <p>复制飞书多维表格的分享链接并粘贴到此处，系统会自动识别并提取<strong>表格链接 Token</strong> 和<strong>数据表 ID</strong>。</p>
+          <p>把飞书表格的网址粘贴到这里就行。插件会自动识别这是哪张表、哪张子表。</p>
         </div>
 
         <div className="field-help-section">
@@ -159,35 +159,35 @@ export const FIELD_HELP_CONTENT = {
           <div className="field-help-url-legend">
             <div className="field-help-legend-item">
               <span className="field-help-legend-color field-help-legend-highlight"></span>
-              <span>红色部分分别是 Token 和 数据表 ID</span>
+              <span>红色部分是插件自动识别的表格信息</span>
             </div>
           </div>
         </div>
 
         <div className="field-help-alert field-help-tip">
-          <strong>💡 提示：</strong>粘贴链接后，下方的「表格链接 Token」和「数据表 ID」会自动填充，无需手动填写。
+          <strong>💡 提示：</strong>你只需要粘贴完整链接，下方两个编号会自动填好。
         </div>
       </>
     ),
   },
   appToken: {
-    title: '表格链接 Token',
+    title: '自动识别的表格编号',
     icon: '📊',
-    description: '从链接中自动提取',
+    description: '从飞书表格链接里自动识别',
     content: (
       <>
         <div className="field-help-section">
           <h5 className="field-help-section-title">🤖 自动提取</h5>
-          <p>此字段会从上方粘贴的「多维表格链接」中自动提取，无需手动填写。</p>
+          <p>这个编号会从上方粘贴的飞书表格链接里自动识别，一般不用手动改。</p>
         </div>
 
         <div className="field-help-alert field-help-tip">
-          <strong>💡 提示：</strong>只需在「多维表格链接」输入框中粘贴完整的表格链接即可。
+          <strong>💡 提示：</strong>只需在「飞书表格链接」输入框中粘贴完整链接即可。
         </div>
 
         <div className="field-help-section">
-          <h5 className="field-help-section-title">🔧 手动修改</h5>
-          <p>如果自动提取失败，可以手动修改。Token 是链接中 <code>base/</code> 后面的字符串：</p>
+          <h5 className="field-help-section-title">🔧 什么时候需要手动改？</h5>
+          <p>只有在自动识别失败时才需要手动改。它通常是链接中 <code>base/</code> 后面的那段字符：</p>
         </div>
 
         <div className="field-help-example">
@@ -202,7 +202,7 @@ export const FIELD_HELP_CONTENT = {
           <div className="field-help-url-legend">
             <div className="field-help-legend-item">
               <span className="field-help-legend-color field-help-legend-highlight"></span>
-              <span>红色部分就是表格链接 Token</span>
+              <span>红色部分就是表格编号</span>
             </div>
           </div>
         </div>
@@ -210,23 +210,23 @@ export const FIELD_HELP_CONTENT = {
     ),
   },
   tableId: {
-    title: '数据表 ID',
+    title: '自动识别的子表编号',
     icon: '📋',
-    description: '从链接中自动提取',
+    description: '从飞书表格链接里自动识别',
     content: (
       <>
         <div className="field-help-section">
           <h5 className="field-help-section-title">🤖 自动提取</h5>
-          <p>此字段会从上方粘贴的「多维表格链接」中自动提取，无需手动填写。</p>
+          <p>这个编号会从上方粘贴的飞书表格链接里自动识别，一般不用手动改。</p>
         </div>
 
         <div className="field-help-alert field-help-tip">
-          <strong>💡 提示：</strong>只需在「多维表格链接」输入框中粘贴完整的表格链接即可。
+          <strong>💡 提示：</strong>只需在「飞书表格链接」输入框中粘贴完整链接即可。
         </div>
 
         <div className="field-help-section">
-          <h5 className="field-help-section-title">🔧 手动修改</h5>
-          <p>如果自动提取失败，可以手动修改。数据表 ID 是链接中 <code>table=</code> 后面的字符串：</p>
+          <h5 className="field-help-section-title">🔧 什么时候需要手动改？</h5>
+          <p>只有在自动识别失败时才需要手动改。它通常是链接中 <code>table=</code> 后面的那段字符：</p>
         </div>
 
         <div className="field-help-example">
@@ -241,36 +241,36 @@ export const FIELD_HELP_CONTENT = {
           <div className="field-help-url-legend">
             <div className="field-help-legend-item">
               <span className="field-help-legend-color field-help-legend-highlight"></span>
-              <span>红色部分就是数据表 ID</span>
+              <span>红色部分就是子表编号</span>
             </div>
           </div>
         </div>
 
         <div className="field-help-alert field-help-info">
-          <strong>🔄 切换数据表：</strong>在多维表格中切换不同的子表，链接中的 table 参数会相应变化。
+          <strong>🔄 切换子表：</strong>在飞书表格里切换不同子表后，请重新复制链接再粘贴。
         </div>
       </>
     ),
   },
   fieldMapping: {
-    title: '字段对应关系',
+    title: '每一列保存什么',
     icon: '🔄',
-    description: '配置网页内容保存到表格的对应列',
+    description: '告诉插件网页内容要放进哪一列',
     content: (
       <>
         <div className="field-help-section">
-          <h5 className="field-help-section-title">📋 什么是字段对应关系？</h5>
-          <p>字段对应关系告诉插件：网页上的哪些内容应该保存到表格的哪一列。通过配置映射关系，你可以自定义数据的存储方式。</p>
+          <h5 className="field-help-section-title">📋 这一项的作用</h5>
+          <p>这一步是在告诉插件：网页标题放到哪一列，网页链接放到哪一列，备注和标签放到哪一列。</p>
         </div>
 
         <div className="field-help-section">
-          <h5 className="field-help-section-title">📊 可映射的网页内容</h5>
+          <h5 className="field-help-section-title">📊 可以保存哪些内容？</h5>
           <div className="field-help-mapping-grid">
             <div className="field-help-mapping-item">
               <span className="field-help-mapping-icon">📰</span>
               <div className="field-help-mapping-info">
                 <strong>文章标题</strong>
-                <span>网页的 &lt;title&gt; 标签内容</span>
+                <span>当前网页的标题</span>
               </div>
             </div>
             <div className="field-help-mapping-item">
@@ -284,14 +284,14 @@ export const FIELD_HELP_CONTENT = {
               <span className="field-help-mapping-icon">🔗</span>
               <div className="field-help-mapping-info">
                 <strong>页面网址</strong>
-                <span>当前页面的完整 URL</span>
+                <span>当前网页的网址</span>
               </div>
             </div>
             <div className="field-help-mapping-item">
               <span className="field-help-mapping-icon">🖼️</span>
               <div className="field-help-mapping-info">
                 <strong>封面图片</strong>
-                <span>网页的主图或首图 URL</span>
+                <span>网页主图的网址</span>
               </div>
             </div>
             <div className="field-help-mapping-item">
@@ -304,8 +304,8 @@ export const FIELD_HELP_CONTENT = {
             <div className="field-help-mapping-item">
               <span className="field-help-mapping-icon">🏷️</span>
               <div className="field-help-mapping-info">
-                <strong>固定值</strong>
-                <span>你自定义的固定文本内容</span>
+                <strong>固定内容</strong>
+                <span>每次保存都写入同一段文字</span>
               </div>
             </div>
           </div>
@@ -317,7 +317,7 @@ export const FIELD_HELP_CONTENT = {
             <div className="field-help-example-row field-help-example-header">
               <span>网页内容</span>
               <span>→</span>
-              <span>表格字段</span>
+              <span>表格列名</span>
               <span>建议类型</span>
             </div>
             <div className="field-help-example-row">
@@ -354,11 +354,11 @@ export const FIELD_HELP_CONTENT = {
         </div>
 
         <div className="field-help-alert field-help-warning">
-          <strong>⚠️ 重要：</strong>图片请使用「文本」类型字段保存图片 URL，而不是「附件」类型。
+          <strong>⚠️ 重要：</strong>图片建议用「文本」列保存图片网址，不要用「附件」列。
         </div>
 
         <div className="field-help-alert field-help-tip">
-          <strong>💡 提示：</strong>使用「固定值」可以自动添加标签，如"待阅读"、"技术文章"等。
+          <strong>💡 提示：</strong>如果某一列每次都要写同样内容，可以选择「固定值」。例如：状态列固定写"待阅读"，来源列固定写"插件保存"。
         </div>
       </>
     ),

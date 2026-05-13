@@ -7,9 +7,31 @@ export interface FeishuCredentials {
 }
 
 /**
+ * Notion 集成凭证
+ */
+export interface NotionCredentials {
+  integrationToken: string;
+}
+
+/**
  * 字段映射来源类型
  */
-export type MappingSourceType = 'url' | 'title' | 'docUrl' | 'contentText' | 'content' | 'image' | 'saveTime' | 'static';
+export type MappingSourceType =
+  | 'url'
+  | 'title'
+  | 'docUrl'
+  | 'description'
+  | 'contentText'
+  | 'content'
+  | 'image'
+  | 'saveTime'
+  | 'tags'
+  | 'source'
+  | 'status'
+  | 'excerpt'
+  | 'note'
+  | 'reviewAt'
+  | 'static';
 
 /**
  * 表格字段映射配置
@@ -30,6 +52,7 @@ export interface TableConfig {
   appToken: string;
   tableId: string;
   tableUrl: string;
+  templateId?: KnowledgeTemplateId;
   fieldMappings: TableFieldMapping[];
   createdAt: number;
   updatedAt: number;
@@ -40,9 +63,14 @@ export interface TableConfig {
  */
 export interface AppConfig {
   feishu: FeishuCredentials;
+  notion: NotionCredentials;
   tables: TableConfig[];
+  interopConfigs: InteropConfig[];
+  saveMode: SaveMode;
   version: string;
 }
+
+export type SaveMode = 'both' | 'feishu' | 'markdown';
 
 /**
  * 提取的页面内容
@@ -52,9 +80,24 @@ export interface ExtractedPageContent {
   title: string;
   description?: string;
   content?: string;
+  selectedText?: string;
   mainImage?: string;
   publishedAt?: string;
   savedAt: string;
+}
+
+export type KnowledgeTemplateId = 'readingInbox' | 'researchLibrary' | 'contentIdeas';
+
+/**
+ * 剪藏时补充的知识整理信息
+ */
+export interface KnowledgeMetadata {
+  tags: string[];
+  source: string;
+  status: string;
+  excerpt?: string;
+  note?: string;
+  reviewAt?: string;
 }
 
 /**
@@ -99,6 +142,7 @@ export interface SaveResult {
   error?: string;
   tableUrl?: string;
   documentUrl?: string;
+  markdownFallback?: boolean;
 }
 
 /**
@@ -180,7 +224,7 @@ export interface TextBlockContent {
  * HTML 元素信息（从 content-script 解析后传递给 background）
  */
 export interface HtmlElementInfo {
-  type: 'text' | 'heading' | 'image' | 'list' | 'link';
+  type: 'text' | 'heading' | 'image' | 'list' | 'link' | 'quote';
   content?: string;
   level?: 1 | 2 | 3;
   imageUrl?: string;
@@ -195,4 +239,55 @@ export interface FeishuDocument {
   document_id: string;
   title: string;
   url: string;
+}
+
+export type InteropFieldType =
+  | 'text'
+  | 'number'
+  | 'select'
+  | 'multi_select'
+  | 'date'
+  | 'person'
+  | 'checkbox'
+  | 'url'
+  | 'email';
+
+export interface InteropFieldSchema {
+  id: string;
+  name: string;
+  type: InteropFieldType;
+  rawType?: string;
+}
+
+export type InteropDirection = 'notion-to-feishu' | 'feishu-to-notion';
+
+export interface InteropFieldMapping {
+  sourceFieldId: string;
+  sourceFieldName: string;
+  targetFieldId: string;
+  targetFieldName: string;
+}
+
+export interface InteropConfig {
+  id: string;
+  name: string;
+  direction: InteropDirection;
+  notionDatabaseId: string;
+  feishuAppToken: string;
+  feishuTableId: string;
+  feishuTableUrl?: string;
+  mappings: InteropFieldMapping[];
+  limit: number;
+  lastSyncAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface InteropSyncResult {
+  success: boolean;
+  direction: InteropDirection;
+  read: number;
+  written: number;
+  failed: number;
+  errors: string[];
 }

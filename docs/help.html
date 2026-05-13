@@ -159,33 +159,33 @@
 <body>
     <div class="container">
         <h1>Save to Feishu 使用帮助</h1>
-        <p class="subtitle">一键保存网页内容到飞书多维表格</p>
+        <p class="subtitle">把网页保存到飞书，也支持 Notion 与飞书之间同步资料</p>
 
         <h2>📖 快速开始</h2>
         
         <div class="step">
-            <h3><span class="step-number">1</span>获取飞书应用凭证</h3>
+            <h3><span class="step-number">1</span>让插件连接飞书</h3>
             <ol>
                 <li>访问 <a href="https://open.feishu.cn/app" target="_blank">飞书开放平台</a></li>
                 <li>登录后点击"创建企业自建应用"</li>
                 <li>填写应用名称（如"Save to Feishu"），选择应用类型</li>
-                <li>创建完成后，在"凭证与基础信息"中获取：
+                <li>创建完成后，在"凭证与基础信息"中复制飞书给插件的两串钥匙：
                     <ul>
-                        <li><strong>App ID</strong></li>
-                        <li><strong>App Secret</strong></li>
+                        <li><strong>App ID</strong>（第 1 串钥匙）</li>
+                        <li><strong>App Secret</strong>（第 2 串钥匙）</li>
                     </ul>
                 </li>
             </ol>
         </div>
 
         <div class="step">
-            <h3><span class="step-number">2</span>配置应用权限</h3>
+            <h3><span class="step-number">2</span>允许插件保存到表格</h3>
             <ol>
                 <li>在应用后台，点击"权限管理"</li>
                 <li>添加以下权限：
                     <ul>
-                        <li><code>bitable:app</code> - 访问多维表格</li>
-                        <li><code>bitable:record</code> - 操作记录</li>
+                        <li>读写多维表格：用于把网页内容保存进去</li>
+                        <li>查看多维表格结构：用于读取表格里有哪些列</li>
                     </ul>
                 </li>
                 <li>点击"申请权限"并等待审批（通常自动通过）</li>
@@ -193,10 +193,10 @@
         </div>
 
         <div class="step">
-            <h3><span class="step-number">3</span>创建多维表格</h3>
+            <h3><span class="step-number">3</span>准备一个飞书资料库</h3>
             <ol>
                 <li>在飞书中创建一个新的多维表格</li>
-                <li>添加需要的字段，例如：
+                <li>添加需要的列，例如：
                     <ul>
                         <li>标题（文本）</li>
                         <li>链接（文本/链接）</li>
@@ -207,18 +207,19 @@
                 </li>
                 <li>点击表格右上角的"分享"按钮</li>
                 <li>开启"分享到互联网"或分享给应用</li>
-                <li>复制表格链接，提取 <strong>Table ID</strong>（链接中的字符串）</li>
+                <li>复制表格链接，之后直接粘贴到插件里即可</li>
             </ol>
         </div>
 
         <div class="step">
-            <h3><span class="step-number">4</span>配置扩展</h3>
+            <h3><span class="step-number">4</span>在插件里添加资料库</h3>
             <ol>
                 <li>点击扩展图标，选择"设置"</li>
-                <li>填入 App ID 和 App Secret</li>
-                <li>点击"添加表格"，输入表格名称和 Table ID</li>
-                <li>配置字段映射（将网页内容与表格字段对应）</li>
-                <li>保存配置</li>
+                <li>填入飞书给插件的两串钥匙（App ID 和 App Secret）</li>
+                <li>点击"添加资料库"，给资料库起个名字</li>
+                <li>粘贴完整的飞书表格链接</li>
+                <li>点击"读取表格列名"，告诉插件标题、链接、备注等内容分别放到哪一列</li>
+                <li>保存</li>
             </ol>
         </div>
 
@@ -232,6 +233,60 @@
             </ol>
         </div>
 
+        <h2>🔄 Notion 与飞书同步</h2>
+
+        <div class="step">
+            <h3><span class="step-number">1</span>在 Notion 创建一个连接</h3>
+            <ol>
+                <li>在插件设置页点击"打开 Notion 获取连接码"，或访问 <a href="https://www.notion.so/my-integrations" target="_blank">Notion Integrations</a></li>
+                <li>创建一个内部连接，复制 Notion 生成的 <strong>连接码</strong>（通常以 secret_ 开头）</li>
+                <li>打开要同步的 Notion 数据库页面，点击右上角"···" → "Connections"</li>
+                <li>将刚创建的连接添加到该数据库</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">2</span>保存 Notion 连接码</h3>
+            <ol>
+                <li>进入扩展设置页，选择"Notion 与飞书同步"</li>
+                <li>粘贴 Notion 连接码</li>
+                <li>点击"检查连接"</li>
+                <li>连接成功后，扩展会列出它能看到的 Notion 数据库</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">3</span>创建一条同步规则</h3>
+            <ol>
+                <li>填写规则名称，例如"Notion 选题库同步到飞书"</li>
+                <li>选择同步方向：<strong>Notion → 飞书</strong> 或 <strong>飞书 → Notion</strong></li>
+                <li>选择或粘贴 Notion 数据库页面链接</li>
+                <li>从已经连接的飞书资料库中选择目标表格</li>
+                <li>设置这次最多同步多少条，首次建议先用 10-20 条测试</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">4</span>告诉插件每一列怎么对应</h3>
+            <ol>
+                <li>点击"读取两边列名"，让插件读取 Notion 和飞书各有哪些列</li>
+                <li>如果两边列名相同，可以点击"自动匹配同名列"</li>
+                <li>检查每一行：左边是要同步的列，右边是同步后放入哪一列</li>
+                <li>点击"保存规则"，以后可以复用这组设置</li>
+                <li>点击"开始同步"，扩展会按当前方向同步资料</li>
+            </ol>
+        </div>
+
+        <div class="tip">
+            <div class="tip-title">💡 提示：从弹窗快速进入</div>
+            <p>在扩展弹窗中点击"Notion 与飞书同步"，可以直接打开同步规则设置页。</p>
+        </div>
+
+        <div class="warning">
+            <div class="warning-title">⚠️ 注意：同步范围</div>
+            <p>当前需要手动点击"开始同步"，插件不会自动监听 Notion 或飞书的变化。建议优先使用文本、数字、日期、单选、多选、网址、邮箱、复选框这些普通列；人员、附件等复杂列可能会跳过或变成文字。</p>
+        </div>
+
         <h2>💡 使用技巧</h2>
 
         <div class="tip">
@@ -240,8 +295,8 @@
         </div>
 
         <div class="tip">
-            <div class="tip-title">💡 提示：字段类型</div>
-            <p>飞书多维表格支持多种字段类型，建议：标题用"文本"，链接用"链接"或"文本"，正文用"多行文本"，图片用"附件"。</p>
+            <div class="tip-title">💡 提示：列类型</div>
+            <p>建议：标题用"文本"，链接用"链接"或"文本"，正文用"多行文本"，图片用"文本"保存图片网址。</p>
         </div>
 
         <div class="tip">
@@ -249,31 +304,36 @@
             <p>虽然扩展不支持批量保存多个网页，但您可以快速连续保存多个页面，所有内容都会按顺序添加到表格中。</p>
         </div>
 
+        <div class="tip">
+            <div class="tip-title">💡 提示：Notion 与飞书同步</div>
+            <p>如果你同时使用 Notion 和飞书，可以为不同资料库建立多个同步规则，例如"Notion 选题库 → 飞书团队表"或"飞书研究资料 → Notion 个人库"。</p>
+        </div>
+
         <h2>⚠️ 常见问题</h2>
 
         <div class="faq-item">
-            <div class="faq-question">Q: 保存失败，提示"Forbidden"或权限错误？</div>
+            <div class="faq-question">Q: 保存失败，提示没有权限？</div>
             <div class="faq-answer">
                 <p>请检查：</p>
                 <ul>
-                    <li>应用是否已申请 <code>bitable:app</code> 和 <code>bitable:record</code> 权限</li>
-                    <li>表格是否已分享给应用（开启"允许应用编辑"）</li>
-                    <li>App ID 和 App Secret 是否填写正确</li>
+                    <li>飞书应用是否已经允许读写表格</li>
+                    <li>表格是否已允许这个应用编辑</li>
+                    <li>App ID 和 App Secret 是否复制完整</li>
                 </ul>
             </div>
         </div>
 
         <div class="faq-item">
-            <div class="faq-question">Q: 保存失败，提示"FieldNameNotFound"？</div>
+            <div class="faq-question">Q: 保存失败，提示找不到某一列？</div>
             <div class="faq-answer">
-                <p>字段名称不匹配。请重新获取表格字段，确保配置的字段名称与飞书表格中的字段完全一致（包括大小写）。</p>
+                <p>列名不匹配。请重新点击"读取表格列名"，再确认每一列应该保存什么。</p>
             </div>
         </div>
 
         <div class="faq-item">
-            <div class="faq-question">Q: 保存失败，提示"URLFieldConvFail"？</div>
+            <div class="faq-question">Q: 链接没有保存成功？</div>
             <div class="faq-answer">
-                <p>链接字段格式错误。如果飞书表格的链接字段要求特定格式，请确保网页 URL 是完整的 http/https 链接。</p>
+                <p>链接列类型不合适。请在飞书表格中，将对应列改成"超链接"或"文本"。</p>
             </div>
         </div>
 
@@ -281,6 +341,20 @@
             <div class="faq-question">Q: 提取的内容不完整？</div>
             <div class="faq-answer">
                 <p>某些网页使用动态加载或特殊结构，可能导致内容提取不完整。尝试刷新页面后再次保存。</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: Notion 能连接，但看不到我的数据库？</div>
+            <div class="faq-answer">
+                <p>通常是因为你还没有把 Notion 连接添加到目标数据库。请打开 Notion 数据库页面，点击右上角"···" → "Connections"，添加你创建的连接，然后回到扩展重新读取列名。</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: 同步后有些列是空的？</div>
+            <div class="faq-answer">
+                <p>请检查两边的列类型是否兼容。建议优先对应文本、数字、日期、单选、多选、网址、邮箱、复选框这些普通列。人员、附件等复杂列可以先改成文本列保存。</p>
             </div>
         </div>
 
@@ -296,9 +370,10 @@
         <div class="warning">
             <div class="warning-title">⚠️ 安全提醒</div>
             <ul>
-                <li>您的 App ID 和 App Secret 仅存储在本地浏览器中</li>
+                <li>你的 App ID 和 App Secret 仅存储在本地浏览器中</li>
+                <li>Notion 连接码同样仅存储在本地浏览器中，导出设置时默认不会包含</li>
                 <li>所有数据直接发送到您的飞书表格，不经过第三方服务器</li>
-                <li>建议不要将敏感凭证分享给他人</li>
+                <li>建议不要将连接密钥分享给他人</li>
                 <li>定期检查飞书应用权限设置</li>
             </ul>
         </div>

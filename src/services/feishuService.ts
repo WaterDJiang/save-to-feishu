@@ -1,4 +1,13 @@
-import type { FeishuCredentials, FeishuField, FeishuTable, SaveResult, ExtractedPageContent, TableConfig, HtmlElementInfo } from '@/types';
+import type {
+  FeishuCredentials,
+  FeishuField,
+  FeishuTable,
+  SaveResult,
+  ExtractedPageContent,
+  TableConfig,
+  HtmlElementInfo,
+  KnowledgeMetadata,
+} from '@/types';
 import { getFeishuCredentials, saveTableConfig } from './storageService';
 import { createDocumentWithElements } from './feishuDocumentService';
 
@@ -272,7 +281,7 @@ export async function getTableFields(appToken: string, tableId: string): Promise
  * 根据字段类型格式化值
  * 飞书多维表不同字段类型需要不同的数据格式
  */
-function formatFieldValue(value: any, fieldType: FeishuField['type']): any {
+export function formatFeishuFieldValue(value: any, fieldType: FeishuField['type']): any {
   switch (fieldType) {
     case 'url':
       // URL 类型 - 飞书多维表的 URL 字段必须使用对象格式
@@ -335,10 +344,25 @@ function formatFieldValue(value: any, fieldType: FeishuField['type']): any {
       return value;
     
     case 'single_select':
-    case 'multi_select':
-      // 单选/多选类型需要选项对象
+      // 单选类型需要选项对象
+      if (Array.isArray(value) && value.length > 0) {
+        return { text: String(value[0]) };
+      }
       if (typeof value === 'string' && value) {
         return { text: value };
+      }
+      return value;
+
+    case 'multi_select':
+      // 多选类型用数组承载，兼容逗号分隔标签
+      if (Array.isArray(value)) {
+        return value.map(item => {
+          if (typeof item === 'string') return { text: item };
+          return item;
+        });
+      }
+      if (typeof value === 'string' && value) {
+        return value.split(/[,，]/).map(item => item.trim()).filter(Boolean).map(text => ({ text }));
       }
       return value;
     
@@ -364,7 +388,8 @@ function formatFieldValue(value: any, fieldType: FeishuField['type']): any {
 export async function saveToFeishu(
   tableConfig: TableConfig,
   content: ExtractedPageContent,
-  htmlElements?: HtmlElementInfo[]
+  htmlElements?: HtmlElementInfo[],
+  metadata?: KnowledgeMetadata
 ): Promise<SaveResult> {
   try {
     console.log('[Feishu] 开始保存数据到飞书表格...');
@@ -398,7 +423,7 @@ export async function saveToFeishu(
     // 验证字段映射配置
     if (!tableConfig.fieldMappings || tableConfig.fieldMappings.length === 0) {
       console.error('[Feishu] 未配置字段映射');
-      return { success: false, error: '未配置字段映射，请先在设置中配置字段映射' };
+      return { success: false, error: '还没有设置保存内容对应到哪一列，请先到设置页完成列对应关系。' };
     }
     
     // 获取当前表格的实际字段列表，用于验证字段
@@ -459,6 +484,9 @@ export async function saveToFeishu(
           value = documentUrl || '';
           console.log(`[Feishu] DocUrl 字段值:`, value);
           break;
+        case 'description':
+          value = content.description || '';
+          break;
         case 'contentText':
           value = content.content || '';
           console.log(`[Feishu] ContentText 字段值:`, value);
@@ -473,6 +501,24 @@ export async function saveToFeishu(
         case 'saveTime':
           value = content.savedAt;
           break;
+        case 'tags':
+          value = metadata?.tags?.join(', ') || '';
+          break;
+        case 'source':
+          value = metadata?.source || '';
+          break;
+        case 'status':
+          value = metadata?.status || '未处理';
+          break;
+        case 'excerpt':
+          value = metadata?.excerpt || content.selectedText || content.description || '';
+          break;
+        case 'note':
+          value = metadata?.note || '';
+          break;
+        case 'reviewAt':
+          value = metadata?.reviewAt || '';
+          break;
         case 'static':
           value = mapping.staticValue || '';
           break;
@@ -481,7 +527,7 @@ export async function saveToFeishu(
       if (value !== null && value !== undefined) {
         // 根据字段类型格式化数据
         console.log(`[Feishu] 格式化前 - ${actualField.name} (类型: ${actualField.type}):`, value, typeof value);
-        const formattedValue = formatFieldValue(value, actualField.type);
+        const formattedValue = formatFeishuFieldValue(value, actualField.type);
         console.log(`[Feishu] 格式化后 - ${actualField.name}:`, formattedValue, typeof formattedValue);
         
         // 如果格式化后值为 null，跳过该字段
@@ -506,8 +552,8 @@ export async function saveToFeishu(
       console.error('[Feishu] 没有有效的字段映射');
       const missingNames = missingMappings.map(item => item.feishuFieldName).filter(Boolean).join('、');
       const errorMessage = missingNames
-        ? `字段映射无效：${missingNames}。请重新获取表格字段并配置映射。`
-        : '没有有效的字段映射，请检查映射配置';
+        ? `列对应关系已失效：${missingNames}。请重新读取表格列名，并确认每一列要保存什么。`
+        : '没有可用的列对应关系，请到设置页检查。';
       return { success: false, error: errorMessage };
     }
     
@@ -663,4 +709,94 @@ export async function testTableAccess(appToken: string, tableId: string): Promis
   } catch {
     return false;
   }
+}
+
+export interface FeishuRecord {
+  recordId: string;
+  fields: Record<string, any>;
+}
+
+export async function fetchFeishuRecordsSample(
+  appToken: string,
+  tableId: string,
+  limit: number = 50
+): Promise<FeishuRecord[]> {
+  try {
+    const headers = await getAuthHeaders();
+    if (!headers || !appToken || !tableId) return [];
+
+    const records: FeishuRecord[] = [];
+    let pageToken = '';
+
+    while (records.length < limit) {
+      const url = new URL(`${LARK_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records`);
+      url.searchParams.set('page_size', String(Math.min(100, limit - records.length)));
+      if (pageToken) url.searchParams.set('page_token', pageToken);
+
+      const response = await fetch(url.toString(), { headers });
+      if (!response.ok) break;
+
+      const data = await response.json();
+      if (typeof data.code === 'number' && data.code !== 0) break;
+
+      const items = (data.data?.items || []) as Array<{ record_id?: string; id?: string; fields?: Record<string, any> }>;
+      for (const item of items) {
+        records.push({
+          recordId: item.record_id || item.id || '',
+          fields: item.fields || {},
+        });
+      }
+
+      if (!data.data?.has_more || !data.data?.page_token) break;
+      pageToken = data.data.page_token;
+    }
+
+    return records;
+  } catch (error) {
+    console.error('[Feishu] 获取记录失败:', error);
+    return [];
+  }
+}
+
+export async function batchCreateFeishuRecordsDetailed(
+  appToken: string,
+  tableId: string,
+  records: Array<{ fields: Record<string, any> }>
+): Promise<{ success: number; total: number; failed: number; errors: string[] }> {
+  const headers = await getAuthHeaders();
+  if (!headers) {
+    return { success: 0, total: records.length, failed: records.length, errors: ['无法获取飞书认证 Token'] };
+  }
+
+  let success = 0;
+  const errors: string[] = [];
+  const chunkSize = 500;
+
+  for (let i = 0; i < records.length; i += chunkSize) {
+    const chunk = records.slice(i, i + chunkSize);
+    const response = await fetch(`${LARK_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_create`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ records: chunk }),
+    });
+
+    const data = await response.json().catch(() => ({ code: -1, msg: '响应解析失败' }));
+    if (!response.ok || (typeof data.code === 'number' && data.code !== 0)) {
+      errors.push(data.msg || `批量写入失败：HTTP ${response.status}`);
+      continue;
+    }
+
+    const items = (data.data?.records || data.data?.items || []) as unknown[];
+    success += items.length || chunk.length;
+  }
+
+  return {
+    success,
+    total: records.length,
+    failed: records.length - success,
+    errors,
+  };
 }
