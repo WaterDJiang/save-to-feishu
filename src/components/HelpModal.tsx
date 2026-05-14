@@ -48,8 +48,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               </div>
               <div className="help-step-card">
                 <span className="help-step-num">5</span>
-                <h4>对应列名</h4>
-                <p>告诉插件标题、链接、备注分别放到哪一列</p>
+                <h4>开始剪藏</h4>
+                <p>点击插件图标，在侧栏里确认后保存</p>
               </div>
             </div>
           </section>
@@ -176,6 +176,12 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                     <td>https://example.com/article</td>
                   </tr>
                   <tr>
+                    <td><strong>资料类型</strong></td>
+                    <td>阅读资料、行业研究、内容素材等分类</td>
+                    <td><span className="help-badge">单选/文本</span></td>
+                    <td>行业研究</td>
+                  </tr>
+                  <tr>
                     <td><strong>封面图片</strong></td>
                     <td>网页的主图或首图 URL</td>
                     <td><span className="help-badge">文本</span></td>
@@ -195,6 +201,24 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </section>
+
+          {/* AI 整理 */}
+          <section className="help-section">
+            <h3>✨ 浏览器本地整理建议</h3>
+            <p className="help-section-desc">在支持 Chrome 内置 AI 的浏览器中，侧栏会自动给出摘要、标签和资料类型。它只是保存前的建议，你可以直接修改。</p>
+            <div className="help-step">
+              <h4>使用方式</h4>
+              <ol>
+                <li>打开要保存的网页，点击插件图标打开侧栏</li>
+                <li>等待「整理建议」生成摘要、标签和资料类型</li>
+                <li>检查内容是否合适，需要时手动修改</li>
+                <li>点击「保存到飞书」或「下载 Markdown」</li>
+              </ol>
+              <div className="help-tip">
+                <strong>说明：</strong>这个能力使用浏览器本地能力，不需要填写 OpenAI、豆包或其他云端 API key。当前 Chrome 暂不支持时，仍然可以手动填写并保存。
+              </div>
             </div>
           </section>
 
@@ -257,23 +281,23 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
             <div className="help-tips-grid">
               <div className="help-tip-card">
                 <h4>🎯 快速保存</h4>
-                <p>点击浏览器工具栏的插件图标，即可快速打开保存浮窗</p>
+                <p>点击浏览器工具栏的插件图标，即可打开网页剪藏侧栏</p>
               </div>
               <div className="help-tip-card">
                 <h4>📑 多表格管理</h4>
                 <p>可以准备多个资料库，按类别保存（如"行业资料"、"设计灵感"）</p>
               </div>
               <div className="help-tip-card">
-                <h4>🏷️ 自动分类</h4>
-                <p>使用「固定值」功能，保存时自动添加标签或分类</p>
+                <h4>🏷️ 标签与类型</h4>
+                <p>保存前可以补充标签、资料类型和个人备注，方便以后筛选</p>
               </div>
               <div className="help-tip-card">
-                <h4>🔄 拖拽排序</h4>
-                <p>在保存浮窗中，可以拖拽调整表格的显示顺序</p>
+                <h4>✨ 本地整理建议</h4>
+                <p>Chrome 支持时会自动给出摘要和标签，不支持也不影响手动保存</p>
               </div>
               <div className="help-tip-card">
                 <h4>🔁 Notion 与飞书同步</h4>
-                <p>在弹窗中点击「Notion 与飞书同步」，可直接进入同步规则设置页</p>
+                <p>在侧栏中点击「Notion 与飞书同步」，可直接进入同步规则设置页</p>
               </div>
             </div>
           </section>
@@ -302,6 +326,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               </li>
               <li>
                 <strong>Notion 连接码：</strong>Notion 连接码同样只保存在本地，导出设置时默认不会包含
+              </li>
+              <li>
+                <strong>本地 AI：</strong>整理建议只在浏览器支持时运行，不需要额外 API key，也不会把内容发给插件开发者服务器
               </li>
             </ul>
           </section>

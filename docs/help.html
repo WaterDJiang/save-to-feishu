@@ -159,7 +159,7 @@
 <body>
     <div class="container">
         <h1>Save to Feishu 使用帮助</h1>
-        <p class="subtitle">把网页保存到飞书，也支持 Notion 与飞书之间同步资料</p>
+        <p class="subtitle">在浏览器侧栏中整理网页，保存到飞书、Markdown，并支持 Notion 与飞书同步</p>
 
         <h2>📖 快速开始</h2>
         
@@ -227,10 +227,27 @@
             <h3><span class="step-number">5</span>开始使用</h3>
             <ol>
                 <li>打开想要保存的网页</li>
-                <li>点击扩展图标</li>
-                <li>选择目标表格</li>
-                <li>预览内容后点击"保存到飞书"</li>
+                <li>点击浏览器工具栏里的扩展图标，打开剪藏侧栏</li>
+                <li>确认摘要、标签、资料类型和目标资料库</li>
+                <li>点击"保存到飞书"，也可以单独下载 Markdown</li>
             </ol>
+        </div>
+
+        <h2>✨ 浏览器本地整理建议</h2>
+
+        <div class="step">
+            <h3><span class="step-number">1</span>自动生成保存前建议</h3>
+            <ol>
+                <li>打开网页后点击扩展图标</li>
+                <li>侧栏会读取当前网页标题、链接、正文和选中文本</li>
+                <li>如果当前 Chrome 支持内置 AI，插件会自动生成摘要、标签和资料类型</li>
+                <li>这些内容只是建议，你可以修改后再保存</li>
+            </ol>
+        </div>
+
+        <div class="tip">
+            <div class="tip-title">说明：不需要额外 API key</div>
+            <p>第一版 AI 整理使用 Chrome 浏览器本地能力，不需要填写 OpenAI、豆包或 Claude 的 API key，也不会把网页正文发送到插件开发者服务器。当前 Chrome 暂不支持时，侧栏会提示可以手动填写，保存流程不受影响。</p>
         </div>
 
         <h2>🔄 Notion 与飞书同步</h2>
@@ -278,8 +295,8 @@
         </div>
 
         <div class="tip">
-            <div class="tip-title">💡 提示：从弹窗快速进入</div>
-            <p>在扩展弹窗中点击"Notion 与飞书同步"，可以直接打开同步规则设置页。</p>
+            <div class="tip-title">💡 提示：从侧栏快速进入</div>
+            <p>在剪藏侧栏中点击"Notion 与飞书同步"，可以直接打开同步规则设置页。</p>
         </div>
 
         <div class="warning">
@@ -296,7 +313,7 @@
 
         <div class="tip">
             <div class="tip-title">💡 提示：列类型</div>
-            <p>建议：标题用"文本"，链接用"链接"或"文本"，正文用"多行文本"，图片用"文本"保存图片网址。</p>
+            <p>建议：标题用"文本"，链接用"链接"或"文本"，正文用"多行文本"，资料类型用"单选"或"文本"，图片用"文本"保存图片网址。</p>
         </div>
 
         <div class="tip">
@@ -345,6 +362,13 @@
         </div>
 
         <div class="faq-item">
+            <div class="faq-question">Q: 为什么没有自动生成摘要和标签？</div>
+            <div class="faq-answer">
+                <p>这取决于当前 Chrome 是否支持内置 AI，以及本地模型是否已经准备好。没有自动生成时，可以直接手动填写摘要和标签，不会影响保存。</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
             <div class="faq-question">Q: Notion 能连接，但看不到我的数据库？</div>
             <div class="faq-answer">
                 <p>通常是因为你还没有把 Notion 连接添加到目标数据库。请打开 Notion 数据库页面，点击右上角"···" → "Connections"，添加你创建的连接，然后回到扩展重新读取列名。</p>
@@ -372,6 +396,7 @@
             <ul>
                 <li>你的 App ID 和 App Secret 仅存储在本地浏览器中</li>
                 <li>Notion 连接码同样仅存储在本地浏览器中，导出设置时默认不会包含</li>
+                <li>AI 整理只在浏览器本地能力可用时运行，不需要额外 API key</li>
                 <li>所有数据直接发送到您的飞书表格，不经过第三方服务器</li>
                 <li>建议不要将连接密钥分享给他人</li>
                 <li>定期检查飞书应用权限设置</li>

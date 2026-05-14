@@ -28,6 +28,7 @@ export type MappingSourceType =
   | 'tags'
   | 'source'
   | 'status'
+  | 'contentType'
   | 'excerpt'
   | 'note'
   | 'reviewAt'
@@ -95,6 +96,7 @@ export interface KnowledgeMetadata {
   tags: string[];
   source: string;
   status: string;
+  contentType?: '阅读资料' | '行业研究' | '内容素材' | '工具文档' | '其他';
   excerpt?: string;
   note?: string;
   reviewAt?: string;

@@ -40,6 +40,9 @@ export function generateMarkdown(
     lines.push(`feishu_doc_url: ${renderYamlValue(options.documentUrl)}`);
   }
   lines.push(`status: ${renderYamlValue(metadata?.status || '未处理')}`);
+  if (metadata?.contentType) {
+    lines.push(`content_type: ${renderYamlValue(metadata.contentType)}`);
+  }
   if (metadata?.reviewAt) {
     lines.push(`review_at: ${renderYamlValue(metadata.reviewAt)}`);
   }
@@ -81,6 +84,9 @@ export function generateMarkdown(
   }
   if (metadata?.status) {
     metaLines.push(`- **状态**: ${metadata.status}`);
+  }
+  if (metadata?.contentType) {
+    metaLines.push(`- **资料类型**: ${metadata.contentType}`);
   }
   if (metadata?.tags?.length) {
     metaLines.push(`- **标签**: ${metadata.tags.join(', ')}`);

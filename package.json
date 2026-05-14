@@ -1,11 +1,11 @@
 {
   "name": "save-to-feishu",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Chrome extension to clip web knowledge into Feishu and Markdown",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && npm run build:background && npm run build:content",
+    "build": "tsc && vite build && npm run build:background",
     "build:background": "vite build --config vite.background.config.ts",
     "build:content": "vite build --config vite.content.config.ts",
     "preview": "vite preview"

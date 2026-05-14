@@ -428,6 +428,7 @@ function TableConfigView({
     { value: 'tags', label: '🏷️ 标签', desc: '剪藏时填写的标签' },
     { value: 'source', label: '🌐 来源站点', desc: '网页域名或来源名称' },
     { value: 'status', label: '📥 整理状态', desc: '未处理、待读、精读等状态' },
+    { value: 'contentType', label: '🗂️ 资料类型', desc: '阅读资料、行业研究、内容素材等类型' },
     { value: 'excerpt', label: '✂️ 摘录', desc: '选中文本或摘要' },
     { value: 'note', label: '💬 个人备注', desc: '剪藏时填写的备注' },
     { value: 'reviewAt', label: '📅 下次回顾', desc: '剪藏时选择的回顾日期' },

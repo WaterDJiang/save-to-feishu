@@ -33,7 +33,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     chrome.runtime.openOptionsPage();
     sendResponse({ success: true });
   }
-  // 处理浮窗发来的消息
+  // 兼容旧入口和设置页发来的保存消息
   else if (message.action === 'getTableConfigs') {
     getTableConfigs()
       .then(tables => {
@@ -72,14 +72,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 /**
- * 点击插件图标时显示浮窗
+ * 点击插件图标时打开侧边栏
  */
 chrome.action.onClicked.addListener(async (tab) => {
   if (tab.id) {
     try {
-      await chrome.tabs.sendMessage(tab.id, { action: 'togglePanel' });
+      await chrome.sidePanel.open({ tabId: tab.id });
     } catch (error) {
-      console.error('无法发送消息到 content script:', error);
+      console.error('无法打开侧边栏:', error);
     }
   }
 });
@@ -89,6 +89,9 @@ chrome.action.onClicked.addListener(async (tab) => {
  */
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Save to Feishu extension installed');
+  chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch(error => {
+    console.warn('设置点击图标打开侧边栏失败:', error);
+  });
   createContextMenu();
 });
 
@@ -121,11 +124,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
 
   if (info.menuItemId === CONTEXT_MENU_ID) {
-    // 显示浮窗让用户选择表格
     try {
-      await chrome.tabs.sendMessage(tab.id, { action: 'togglePanel' });
+      await chrome.sidePanel.open({ tabId: tab.id });
     } catch (error) {
-      console.error('无法发送消息到 content script:', error);
+      console.error('无法打开侧边栏:', error);
     }
   } else if (info.menuItemId === CONTEXT_MENU_DIRECT) {
     // 直接保存到第一个表格
@@ -241,35 +243,23 @@ async function handleDirectSave(tabId: number) {
         }
       })(),
       status: '未处理',
+      contentType: '阅读资料',
       excerpt: content.description || '',
       note: '',
       reviewAt: '',
     });
 
-    // 5. 通知用户结果
-    if (result.success) {
-      await chrome.tabs.sendMessage(tabId, {
-        action: 'showNotification',
-        message: '保存成功！',
-        type: 'success',
-      });
-    } else {
-      await chrome.tabs.sendMessage(tabId, {
-        action: 'showNotification',
-        message: `保存失败: ${result.error}`,
-        type: 'error',
-      });
-    }
+    await showActionBadge(result.success ? '✓' : '!', result.success ? '#1f8f4d' : '#d92d20');
   } catch (error) {
     console.error('直接保存失败:', error);
-    try {
-      await chrome.tabs.sendMessage(tabId, {
-        action: 'showNotification',
-        message: `保存失败: ${error instanceof Error ? error.message : '未知错误'}`,
-        type: 'error',
-      });
-    } catch (e) {
-      // 如果发送消息失败，忽略
-    }
+    await showActionBadge('!', '#d92d20');
   }
+}
+
+async function showActionBadge(text: string, color: string): Promise<void> {
+  await chrome.action.setBadgeBackgroundColor({ color });
+  await chrome.action.setBadgeText({ text });
+  setTimeout(() => {
+    chrome.action.setBadgeText({ text: '' });
+  }, 2500);
 }

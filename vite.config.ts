@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
-import { copyFileSync, mkdirSync, existsSync, cpSync } from 'fs';
+import { copyFileSync, mkdirSync, existsSync, cpSync, rmSync } from 'fs';
 
 export default defineConfig({
   plugins: [
@@ -13,11 +13,11 @@ export default defineConfig({
         const srcDir = resolve(__dirname, 'dist/src');
 
         if (existsSync(srcDir)) {
-          if (existsSync(resolve(srcDir, 'popup'))) {
-            cpSync(resolve(srcDir, 'popup'), resolve(distDir, 'popup'), { recursive: true });
-          }
           if (existsSync(resolve(srcDir, 'options'))) {
             cpSync(resolve(srcDir, 'options'), resolve(distDir, 'options'), { recursive: true });
+          }
+          if (existsSync(resolve(srcDir, 'sidepanel'))) {
+            cpSync(resolve(srcDir, 'sidepanel'), resolve(distDir, 'sidepanel'), { recursive: true });
           }
         }
 
@@ -30,6 +30,13 @@ export default defineConfig({
         if (!existsSync(iconsDir)) {
           mkdirSync(iconsDir);
         }
+
+        ['src', 'popup', 'content-script'].forEach((name) => {
+          const target = resolve(distDir, name);
+          if (existsSync(target)) {
+            rmSync(target, { recursive: true, force: true });
+          }
+        });
       },
     },
   ],
@@ -43,8 +50,8 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        popup: resolve(__dirname, 'src/popup/index.html'),
         options: resolve(__dirname, 'src/options/index.html'),
+        sidepanel: resolve(__dirname, 'src/sidepanel/index.html'),
       },
       output: {
         entryFileNames: '[name]/index.js',

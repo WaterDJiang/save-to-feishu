@@ -510,6 +510,9 @@ export async function saveToFeishu(
         case 'status':
           value = metadata?.status || '未处理';
           break;
+        case 'contentType':
+          value = metadata?.contentType || '其他';
+          break;
         case 'excerpt':
           value = metadata?.excerpt || content.selectedText || content.description || '';
           break;
