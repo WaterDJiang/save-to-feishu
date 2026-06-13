@@ -7,9 +7,11 @@ import type {
   TableConfig,
   HtmlElementInfo,
   KnowledgeMetadata,
+  ClipFieldConfig,
 } from '@/types';
 import { getFeishuCredentials, saveTableConfig } from './storageService';
 import { createDocumentWithElements } from './feishuDocumentService';
+import { getAiFieldId } from '@/utils/clipFields';
 
 const LARK_API_BASE = 'https://open.feishu.cn/open-apis';
 
@@ -382,6 +384,19 @@ export function formatFeishuFieldValue(value: any, fieldType: FeishuField['type'
   }
 }
 
+function formatCustomFields(metadata?: KnowledgeMetadata, clipFields: ClipFieldConfig[] = []): string {
+  const customFields = metadata?.customFields || {};
+  const labels = new Map(clipFields.map(field => [field.id, field.label]));
+  return Object.entries(customFields)
+    .map(([id, value]) => {
+      const trimmed = String(value || '').trim();
+      if (!trimmed) return '';
+      return `${labels.get(id) || id}: ${trimmed}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
 /**
  * 保存页面内容到飞书表格
  */
@@ -389,7 +404,8 @@ export async function saveToFeishu(
   tableConfig: TableConfig,
   content: ExtractedPageContent,
   htmlElements?: HtmlElementInfo[],
-  metadata?: KnowledgeMetadata
+  metadata?: KnowledgeMetadata,
+  clipFields?: ClipFieldConfig[]
 ): Promise<SaveResult> {
   try {
     console.log('[Feishu] 开始保存数据到飞书表格...');
@@ -445,7 +461,7 @@ export async function saveToFeishu(
       savedAt: content.savedAt
     });
     
-    for (const mapping of tableConfig.fieldMappings) {
+    for (const mapping of tableConfig.fieldMappings || []) {
       // 跳过空字段 ID
       if (!mapping.feishuFieldId) {
         console.warn('[Feishu] 跳过空字段 ID 的映射:', mapping);
@@ -516,6 +532,12 @@ export async function saveToFeishu(
         case 'excerpt':
           value = metadata?.excerpt || content.selectedText || content.description || '';
           break;
+        case 'aiField':
+          value = metadata?.customFields?.[mapping.aiFieldId || getAiFieldId(mapping.feishuFieldId)] || '';
+          break;
+        case 'customFields':
+          value = formatCustomFields(metadata, clipFields);
+          break;
         case 'note':
           value = metadata?.note || '';
           break;
@@ -546,7 +568,7 @@ export async function saveToFeishu(
         console.warn(`[Feishu] 字段 ${mapping.feishuFieldName} (${mapping.sourceType}) 的值为空，已跳过`);
       }
     }
-    
+
     if (hasMappingUpdates) {
       await saveTableConfig({ ...tableConfig, fieldMappings: tableConfig.fieldMappings });
     }

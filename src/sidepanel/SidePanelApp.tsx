@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowLeftRight,
@@ -7,57 +7,75 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Clock,
   Database,
   Download,
   ExternalLink,
   FileText,
+  History,
   Loader2,
+  MessageSquareWarning,
+  Pencil,
+  Plus,
   RefreshCw,
   Save,
   Settings,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
-import type { ExtractedPageContent, HtmlElementInfo, KnowledgeMetadata, SaveMode, SaveResult, TableConfig } from '@/types';
+import type { ClipFieldConfig, ExtensionUpdateNotice, ExtractedPageContent, HtmlElementInfo, KnowledgeMetadata, ProductEngagement, SaveMode, SavedContentRecord, SaveResult, TableConfig } from '@/types';
 import { checkAiClipAvailability, generateAiClipSuggestion, type AiClipStatus } from '@/services/aiService';
 import { saveToFeishu } from '@/services/feishuService';
-import { getSaveMode, getTableConfigs, saveTableConfigs } from '@/services/storageService';
+import { completeRatingInvitation, dismissCurrentUpdateNotice, dismissRatingInvitation, getClipFields, getExtensionUpdateNotice, getProductEngagement, getSaveMode, getSavedContentRecords, getTableConfigs, rememberSavedContent, saveClipFields, saveTableConfig, saveTableConfigs } from '@/services/storageService';
+import { getAiFieldId, getEffectiveClipFieldType, MAX_CLIP_FIELDS, normalizeClipFields } from '@/utils/clipFields';
 import { downloadMarkdown, generateMarkdown, generateMarkdownFilename } from '@/utils/markdownGenerator';
+import { buildFeishuSavedContentTarget, buildMarkdownSavedContentTarget, createSavedContentRecord, findSavedContentRecord, upsertSavedContentRecord } from '@/utils/savedContent';
+import { shouldClearUpdateBadgeOnLaunch } from '@/utils/updateNotice';
+import { buildTableMappingOptionsHash } from '@/utils/optionsRoute';
+import { buildFeedbackIssueUrl } from '@/utils/feedback';
+import { CHROME_WEB_STORE_REVIEW_URL, DEFAULT_PRODUCT_ENGAGEMENT, shouldShowRatingPrompt } from '@/utils/engagement';
+import {
+  createDefaultKnowledgeMetadata,
+  getSourceHostname,
+  parseKnowledgeTags,
+} from '@/utils/knowledgeMetadata';
+import {
+  ExtensionUpdateCard,
+  PanelStateMessage,
+  RatingInvitationCard,
+  SavedContentLibrary,
+} from '@/sidepanel/components/GrowthPanels';
 
 type PanelState = 'loading' | 'ready' | 'error';
 type AiUiStatus = AiClipStatus | 'idle' | 'loading';
 type PanelStep = 'target' | 'editor';
+type PanelView = 'capture' | 'library';
 
 interface ActivePageData {
   content: ExtractedPageContent;
   htmlElements: HtmlElementInfo[];
 }
 
-function hostname(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
+function truncatePreview(value: string, maxLength = 520): string {
+  const normalized = value
+    .replace(/\r/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength).trim()}...` : normalized;
 }
 
-function parseTags(value: string): string[] {
-  return value
-    .split(/[,，#\n]/)
-    .map(tag => tag.trim())
+function buildPagePreview(content: ExtractedPageContent, elements: HtmlElementInfo[]): string {
+  if (content.selectedText?.trim()) return truncatePreview(content.selectedText, 520);
+
+  const structuredPreview = elements
+    .filter(element => element.content && ['heading', 'text', 'list', 'quote'].includes(element.type))
+    .slice(0, 6)
+    .map(element => element.content?.trim())
     .filter(Boolean)
-    .slice(0, 12);
-}
+    .join('\n');
 
-function defaultMetadata(content: ExtractedPageContent): KnowledgeMetadata {
-  return {
-    tags: [],
-    source: hostname(content.url),
-    status: '未处理',
-    contentType: '阅读资料',
-    excerpt: content.selectedText || content.description || '',
-    note: '',
-    reviewAt: '',
-  };
+  return truncatePreview(structuredPreview || content.content || content.description || '', 520);
 }
 
 function getTableUrl(table: TableConfig | undefined): string {
@@ -65,6 +83,18 @@ function getTableUrl(table: TableConfig | undefined): string {
   if (table.tableUrl?.trim()) return table.tableUrl.trim();
   if (table.appToken && table.tableId) return `https://feishu.cn/base/${table.appToken}?table=${table.tableId}`;
   return '';
+}
+
+function formatSavedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '之前';
+
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 async function getActiveTabId(): Promise<number | undefined> {
@@ -99,7 +129,13 @@ async function extractActivePage(): Promise<ActivePageData> {
         const clone = el.cloneNode(true) as HTMLElement;
         clone.querySelectorAll('script, style, noscript, iframe, svg, header, footer, nav, aside').forEach(node => node.remove());
         clone.querySelectorAll('[style*="display:none"],[style*="display: none"],[style*="visibility:hidden"],[style*="visibility: hidden"]').forEach(node => node.remove());
-        return clone.textContent?.trim().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').slice(0, 5000) || '';
+        clone.querySelectorAll('br').forEach(node => node.replaceWith('\n'));
+        return (clone.innerText || clone.textContent || '')
+          .trim()
+          .replace(/\r/g, '')
+          .replace(/[ \t]+/g, ' ')
+          .replace(/\n{3,}/g, '\n\n')
+          .slice(0, 5000);
       };
 
       const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute('href') || window.location.href;
@@ -209,13 +245,21 @@ export default function SidePanelApp() {
   const [tables, setTables] = useState<TableConfig[]>([]);
   const [selectedTableId, setSelectedTableId] = useState('');
   const [saveMode, setSaveMode] = useState<SaveMode>('feishu');
+  const [savedContentRecords, setSavedContentRecords] = useState<SavedContentRecord[]>([]);
+  const [updateNotice, setUpdateNotice] = useState<ExtensionUpdateNotice | null>(null);
+  const [productEngagement, setProductEngagement] = useState<ProductEngagement>({ ...DEFAULT_PRODUCT_ENGAGEMENT });
+  const [clipFields, setClipFields] = useState<ClipFieldConfig[]>([]);
+  const [draftClipFields, setDraftClipFields] = useState<ClipFieldConfig[]>([]);
+  const [isEditingFields, setIsEditingFields] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
   const [panelStep, setPanelStep] = useState<PanelStep>('target');
+  const [panelView, setPanelView] = useState<PanelView>('capture');
   const [showAllTables, setShowAllTables] = useState(false);
+  const autoAiRunKeysRef = useRef<Set<string>>(new Set());
   const [aiStatus, setAiStatus] = useState<{ status: AiUiStatus; message: string }>({
     status: 'idle',
-    message: '可选：生成摘要、标签和资料类型。',
+    message: '可选：按当前字段 AI 写入。',
   });
 
   const selectedTable = useMemo(
@@ -223,6 +267,42 @@ export default function SidePanelApp() {
     [selectedTableId, tables]
   );
   const visibleTables = showAllTables ? tables : tables.slice(0, 5);
+  const getSavedRecordForTable = useCallback((table: TableConfig): SavedContentRecord | undefined => {
+    return content
+      ? findSavedContentRecord(savedContentRecords, content.url, buildFeishuSavedContentTarget(table))
+      : undefined;
+  }, [content, savedContentRecords]);
+
+  const currentSavedRecord = useMemo(() => {
+    if (!content) return undefined;
+    if (saveMode === 'markdown') {
+      return findSavedContentRecord(savedContentRecords, content.url, buildMarkdownSavedContentTarget());
+    }
+    return selectedTable ? getSavedRecordForTable(selectedTable) : undefined;
+  }, [content, getSavedRecordForTable, saveMode, savedContentRecords, selectedTable]);
+
+  const getFieldsForTable = useCallback((table?: TableConfig): ClipFieldConfig[] => {
+    const usedIds = new Set<string>();
+    const aiFields = (table?.fieldMappings || [])
+      .filter(mapping => mapping.sourceType === 'aiField')
+      .filter(mapping => {
+        const id = mapping.aiFieldId || getAiFieldId(mapping.feishuFieldId);
+        if (usedIds.has(id)) return false;
+        usedIds.add(id);
+        return true;
+      })
+      .slice(0, MAX_CLIP_FIELDS)
+      .map(mapping => {
+        const fieldId = mapping.aiFieldId || getAiFieldId(mapping.feishuFieldId);
+        const globalField = clipFields.find(field => field.id === fieldId);
+        return {
+          id: fieldId,
+          label: globalField?.label || mapping.aiFieldName?.trim() || mapping.feishuFieldName,
+          type: 'text' as const,
+        };
+      });
+    return normalizeClipFields(aiFields.length > 0 ? aiFields : clipFields);
+  }, [clipFields]);
 
   const refreshAiAvailability = useCallback(async () => {
     setAiStatus({ status: 'idle', message: '正在检查本地整理能力...' });
@@ -230,17 +310,26 @@ export default function SidePanelApp() {
     setAiStatus({ status: ai.status, message: ai.message });
   }, []);
 
-  const applyAiSuggestion = useCallback(async (pageContent: ExtractedPageContent) => {
-    setAiStatus({ status: 'loading', message: '正在生成整理建议...' });
-    const ai = await generateAiClipSuggestion(pageContent);
+  const applyAiSuggestion = useCallback(async (pageContent: ExtractedPageContent, fields: ClipFieldConfig[]) => {
+    setAiStatus({ status: 'loading', message: '正在 AI 写入...' });
+    const ai = await generateAiClipSuggestion(pageContent, fields);
     setAiStatus({ status: ai.status, message: ai.message });
     if (ai.suggestion) {
-      setContent(current => current ? { ...current, description: ai.suggestion?.summary || current.description } : current);
+      const hasSummaryField = fields.some(field => getEffectiveClipFieldType(field) === 'summary');
+      const hasTagsField = fields.some(field => getEffectiveClipFieldType(field) === 'tags');
+      const hasContentTypeField = fields.some(field => getEffectiveClipFieldType(field) === 'contentType');
+      setContent(current => current ? { ...current, description: hasSummaryField ? (ai.suggestion?.summary || current.description) : current.description } : current);
       setMetadata(current => current ? {
         ...current,
-        tags: ai.suggestion?.tags || current.tags,
-        contentType: ai.suggestion?.contentType || current.contentType,
-        excerpt: current.excerpt || ai.suggestion?.summary || '',
+        tags: hasTagsField ? (ai.suggestion?.tags || current.tags) : current.tags,
+        contentType: hasContentTypeField ? (ai.suggestion?.contentType || current.contentType) : current.contentType,
+        excerpt: current.excerpt || (hasSummaryField ? ai.suggestion?.summary : '') || '',
+        customFields: fields.reduce<Record<string, string>>((acc, field) => {
+          if (getEffectiveClipFieldType(field) === 'text') {
+            acc[field.id] = ai.suggestion?.fields[field.id] || current.customFields?.[field.id] || '';
+          }
+          return acc;
+        }, { ...(current.customFields || {}) }),
       } : current);
     }
   }, []);
@@ -250,18 +339,36 @@ export default function SidePanelApp() {
     setSaveResult(null);
     setPanelStep('target');
     setShowAllTables(false);
+    setIsEditingFields(false);
     try {
-      const [configs, mode, page] = await Promise.all([
+      const [configs, mode, page, savedRecords, notice, engagement] = await Promise.all([
         getTableConfigs(),
         getSaveMode(),
         extractActivePage(),
+        getSavedContentRecords(),
+        getExtensionUpdateNotice(),
+        getProductEngagement(),
       ]);
+      const fields = await getClipFields();
       setTables(configs);
       setSaveMode(mode);
+      setSavedContentRecords(savedRecords);
+      setUpdateNotice(notice);
+      setProductEngagement(engagement);
+      if (shouldClearUpdateBadgeOnLaunch(notice)) {
+        chrome.action?.setBadgeText?.({ text: '' }).catch(error => {
+          console.warn('清除更新标记失败:', error);
+        });
+      }
+      setClipFields(fields);
+      setDraftClipFields(fields);
       setSelectedTableId(current => current || configs[0]?.id || '');
       setContent(page.content);
       setHtmlElements(page.htmlElements);
-      setMetadata(defaultMetadata(page.content));
+      setMetadata(createDefaultKnowledgeMetadata(page.content, {
+        contentType: '阅读资料',
+        customFields: {},
+      }));
       setPanelState('ready');
       await refreshAiAvailability();
     } catch (err) {
@@ -284,8 +391,117 @@ export default function SidePanelApp() {
     };
   }, [loadPage]);
 
+  useEffect(() => {
+    if (
+      panelState !== 'ready' ||
+      panelStep !== 'editor' ||
+      !content ||
+      aiStatus.status !== 'available' ||
+      clipFields.length === 0
+    ) {
+      return;
+    }
+
+    const fieldsKey = clipFields.map(field => `${field.id}:${field.label}`).join('|');
+    const autoRunKey = `${content.url}|${content.savedAt}|${selectedTable?.id || 'markdown'}|${fieldsKey}`;
+    if (autoAiRunKeysRef.current.has(autoRunKey)) return;
+
+    autoAiRunKeysRef.current.add(autoRunKey);
+    applyAiSuggestion(content, clipFields);
+  }, [aiStatus.status, applyAiSuggestion, clipFields, content, panelState, panelStep, selectedTable?.id]);
+
   const updateMetadata = (patch: Partial<KnowledgeMetadata>) => {
     setMetadata(current => current ? { ...current, ...patch } : current);
+  };
+
+  const getFieldValue = (field: ClipFieldConfig): string => {
+    if (!content || !metadata) return '';
+    const type = getEffectiveClipFieldType(field);
+    if (type === 'summary') return content.description || '';
+    if (type === 'tags') return metadata.tags.join(', ');
+    if (type === 'contentType') return metadata.contentType || '其他';
+    return metadata.customFields?.[field.id] || '';
+  };
+
+  const updateFieldValue = (field: ClipFieldConfig, value: string) => {
+    const type = getEffectiveClipFieldType(field);
+    if (type === 'summary' && content) {
+      setContent({ ...content, description: value });
+      return;
+    }
+    if (type === 'tags') {
+      updateMetadata({ tags: parseKnowledgeTags(value) });
+      return;
+    }
+    if (type === 'contentType') {
+      updateMetadata({ contentType: value as KnowledgeMetadata['contentType'] });
+      return;
+    }
+    updateMetadata({
+      customFields: {
+        ...(metadata?.customFields || {}),
+        [field.id]: value,
+      },
+    });
+  };
+
+  const saveDraftFields = async () => {
+    const fields = normalizeClipFields(draftClipFields);
+    setClipFields(fields);
+    setDraftClipFields(fields);
+    setIsEditingFields(false);
+    const aiMappings = selectedTable?.fieldMappings?.filter(mapping => mapping.sourceType === 'aiField') || [];
+    if (selectedTable && aiMappings.length > 0) {
+      const labelsById = new Map(fields.map(field => [field.id, field.label]));
+      const nextGlobalFields = normalizeClipFields(clipFields.map(field => labelsById.has(field.id)
+        ? { ...field, label: labelsById.get(field.id) || field.label }
+        : field
+      ));
+      await saveClipFields(nextGlobalFields);
+      const updatedTable = {
+        ...selectedTable,
+        fieldMappings: selectedTable.fieldMappings.map(mapping => mapping.sourceType === 'aiField'
+          ? {
+              ...mapping,
+              aiFieldId: mapping.aiFieldId || getAiFieldId(mapping.feishuFieldId),
+              aiFieldName: labelsById.get(mapping.aiFieldId || getAiFieldId(mapping.feishuFieldId)) || mapping.aiFieldName || mapping.feishuFieldName,
+            }
+          : mapping
+        ),
+        updatedAt: Date.now(),
+      };
+      setTables(current => current.map(table => table.id === updatedTable.id ? updatedTable : table));
+      await saveTableConfig(updatedTable);
+    } else {
+      await saveClipFields(fields);
+    }
+  };
+
+  const toggleFieldEditing = async () => {
+    if (isEditingFields) {
+      await saveDraftFields();
+    } else {
+      setDraftClipFields(clipFields);
+      setIsEditingFields(true);
+    }
+  };
+
+  const updateDraftFieldLabel = (fieldId: string, label: string) => {
+    setDraftClipFields(current => current.map(field => field.id === fieldId ? { ...field, label } : field));
+  };
+
+  const addDraftField = () => {
+    setDraftClipFields(current => {
+      if (current.length >= MAX_CLIP_FIELDS) return current;
+      return [
+        ...current,
+        { id: `custom-${Date.now()}`, label: `自定义字段 ${current.length + 1}`, type: 'text' },
+      ];
+    });
+  };
+
+  const removeDraftField = (fieldId: string) => {
+    setDraftClipFields(current => current.length <= 1 ? current : current.filter(field => field.id !== fieldId));
   };
 
   const handleSave = async () => {
@@ -295,13 +511,26 @@ export default function SidePanelApp() {
     try {
       let result: SaveResult = { success: true };
       if (saveMode !== 'markdown') {
-        result = await saveToFeishu(selectedTable!, content, htmlElements, metadata);
+        result = await saveToFeishu(selectedTable!, content, htmlElements, metadata, clipFields);
       }
       if (saveMode !== 'feishu') {
         downloadMarkdown(
-          generateMarkdown(content, htmlElements, { metadata, documentUrl: result.documentUrl }),
+          generateMarkdown(content, htmlElements, { metadata, documentUrl: result.documentUrl, clipFields }),
           generateMarkdownFilename(content.title)
         );
+      }
+      if (result.success) {
+        const record = createSavedContentRecord({
+          content,
+          target: saveMode === 'markdown'
+            ? buildMarkdownSavedContentTarget()
+            : buildFeishuSavedContentTarget(selectedTable!),
+          result,
+          metadata,
+        });
+        setSavedContentRecords(current => upsertSavedContentRecord(current, record));
+        await rememberSavedContent(record);
+        setProductEngagement(await getProductEngagement());
       }
       setSaveResult(result);
     } catch (err) {
@@ -314,20 +543,38 @@ export default function SidePanelApp() {
     }
   };
 
-  const handleMarkdown = () => {
+  const handleMarkdown = async () => {
     if (!content || !metadata) return;
-    downloadMarkdown(generateMarkdown(content, htmlElements, { metadata }), generateMarkdownFilename(content.title));
+    downloadMarkdown(generateMarkdown(content, htmlElements, { metadata, clipFields }), generateMarkdownFilename(content.title));
+    const record = createSavedContentRecord({
+      content,
+      target: buildMarkdownSavedContentTarget(),
+      metadata,
+    });
+    setSavedContentRecords(current => upsertSavedContentRecord(current, record));
+    await rememberSavedContent(record);
+    setProductEngagement(await getProductEngagement());
   };
 
-  const handleAiRetry = () => {
+  const handleAiRetry = async () => {
     if (content && aiStatus.status !== 'loading') {
-      applyAiSuggestion(content);
+      const fields = isEditingFields ? normalizeClipFields(draftClipFields) : clipFields;
+      if (isEditingFields) {
+        await saveDraftFields();
+      }
+      applyAiSuggestion(content, fields);
     }
   };
 
   const handleSelectTable = (tableId: string) => {
+    const table = tables.find(item => item.id === tableId);
     setSelectedTableId(tableId);
     setSaveResult(null);
+    if (table) {
+      const fields = getFieldsForTable(table);
+      setClipFields(fields);
+      setDraftClipFields(fields);
+    }
     setPanelStep('editor');
   };
 
@@ -346,6 +593,41 @@ export default function SidePanelApp() {
     chrome.tabs.create({ url: chrome.runtime.getURL(`options/index.html${hash}`) });
   };
 
+  const openTableMapping = (tableId: string) => {
+    openOptions(buildTableMappingOptionsHash(tableId));
+  };
+
+  const openFeedback = () => {
+    chrome.tabs.create({
+      url: buildFeedbackIssueUrl({
+        extensionVersion: chrome.runtime.getManifest().version,
+        userAgent: navigator.userAgent,
+      }),
+    });
+  };
+
+  const openSavedRecordTarget = (record: SavedContentRecord) => {
+    const targetUrl = record.documentUrl || record.tableUrl;
+    if (targetUrl) chrome.tabs.create({ url: targetUrl });
+  };
+
+  const handleDismissUpdateNotice = async () => {
+    setUpdateNotice(null);
+    await dismissCurrentUpdateNotice();
+    chrome.action?.setBadgeText?.({ text: '' }).catch(error => {
+      console.warn('清除更新标记失败:', error);
+    });
+  };
+
+  const handleDismissRating = async () => {
+    setProductEngagement(await dismissRatingInvitation());
+  };
+
+  const handleRateExtension = async () => {
+    setProductEngagement(await completeRatingInvitation());
+    chrome.tabs.create({ url: CHROME_WEB_STORE_REVIEW_URL });
+  };
+
   const goBackToTarget = () => {
     setSaveResult(null);
     setPanelStep('target');
@@ -356,6 +638,17 @@ export default function SidePanelApp() {
     : saveMode === 'both'
       ? '保存并下载'
       : '保存到飞书';
+  const visibleClipFields = clipFields.length > 0 ? clipFields : normalizeClipFields();
+  const pagePreview = content ? buildPagePreview(content, htmlElements) : '';
+  const showRatingInvitation = shouldShowRatingPrompt(productEngagement);
+  const ratingInvitation = (
+    <RatingInvitationCard
+      visible={showRatingInvitation}
+      successfulSaveCount={productEngagement.successfulSaveCount}
+      onRate={handleRateExtension}
+      onDismiss={handleDismissRating}
+    />
+  );
 
   return (
     <div className="sp-shell">
@@ -363,11 +656,27 @@ export default function SidePanelApp() {
         <div className="sp-brand">
           <img src="/icons/icon-32.png" alt="Save to Feishu" />
           <div>
-            <h1>网页知识剪藏</h1>
-            <p>{panelStep === 'target' ? '选择保存位置' : '整理后保存'}</p>
+            <h1>飞书知识库管理助手</h1>
+            <p>
+              {panelView === 'library'
+                ? '最近保存与待回顾'
+                : panelStep === 'target'
+                  ? '选择保存位置'
+                  : '整理后保存'}
+            </p>
           </div>
         </div>
         <div className="sp-header-actions" aria-label="全局操作">
+          <button
+            className={`sp-header-action ${panelView === 'library' ? 'is-active' : ''}`}
+            onClick={() => setPanelView(current => current === 'library' ? 'capture' : 'library')}
+            title={panelView === 'library' ? '返回网页剪藏' : '最近保存与待回顾'}
+            aria-label={panelView === 'library' ? '返回网页剪藏' : '最近保存与待回顾'}
+            type="button"
+          >
+            <History size={15} />
+            <span className="sp-header-tooltip">{panelView === 'library' ? '返回网页剪藏' : '最近保存与待回顾'}</span>
+          </button>
           <button className="sp-header-action" onClick={() => openOptions()} title="打开设置" aria-label="打开设置" type="button">
             <Settings size={15} />
             <span className="sp-header-tooltip">打开设置</span>
@@ -376,6 +685,10 @@ export default function SidePanelApp() {
             <ArrowLeftRight size={15} />
             <span className="sp-header-tooltip">Notion 与飞书同步</span>
           </button>
+          <button className="sp-header-action" onClick={openFeedback} title="问题反馈" aria-label="问题反馈" type="button">
+            <MessageSquareWarning size={15} />
+            <span className="sp-header-tooltip">问题反馈</span>
+          </button>
           <button className="sp-header-action" onClick={loadPage} title="刷新当前页面" aria-label="刷新当前页面" type="button">
             <RefreshCw size={15} />
             <span className="sp-header-tooltip">刷新当前页面</span>
@@ -383,23 +696,23 @@ export default function SidePanelApp() {
         </div>
       </header>
 
-      {panelState === 'loading' && (
-        <main className="sp-empty">
-          <Loader2 className="sp-spin" size={28} />
-          <span>正在读取当前网页...</span>
-        </main>
-      )}
+      {panelState === 'loading' && <PanelStateMessage state="loading" />}
 
       {panelState === 'error' && (
-        <main className="sp-empty">
-          <AlertCircle size={28} />
-          <strong>无法读取当前网页</strong>
-          <p>{error}</p>
-          <button className="sp-secondary-btn" onClick={loadPage}>重试</button>
-        </main>
+        <PanelStateMessage state="error" message={error} onRetry={loadPage} />
       )}
 
-      {panelState === 'ready' && content && metadata && panelStep === 'target' && (
+      {panelState === 'ready' && panelView === 'library' && (
+        <SavedContentLibrary
+          records={savedContentRecords}
+          onBack={() => setPanelView('capture')}
+          onOpenOriginal={record => chrome.tabs.create({ url: record.url })}
+          onOpenTarget={openSavedRecordTarget}
+          formatSavedAt={formatSavedAt}
+        />
+      )}
+
+      {panelState === 'ready' && panelView === 'capture' && content && metadata && panelStep === 'target' && (
         <main className="sp-main">
           <section className="sp-section sp-target-section">
             <div className="sp-step-label">1 / 2</div>
@@ -411,6 +724,7 @@ export default function SidePanelApp() {
               <div className="sp-table-list" aria-label="飞书资料库">
                 {visibleTables.map(table => {
                   const tableIndex = tables.findIndex(item => item.id === table.id);
+                  const savedRecord = getSavedRecordForTable(table);
                   return (
                   <div
                     key={table.id}
@@ -421,10 +735,22 @@ export default function SidePanelApp() {
                         <Database size={15} />
                       </span>
                       <span className="sp-table-copy">
-                        <strong>{table.name}</strong>
-                        <small>保存到这个飞书资料库</small>
+                        <strong>
+                          <span>{table.name}</span>
+                          {savedRecord && <span className="sp-table-saved-pill">已保存</span>}
+                        </strong>
+                        <small>{savedRecord ? `已保存过 · ${formatSavedAt(savedRecord.savedAt)}` : '保存到这个飞书资料库'}</small>
                       </span>
                       <ChevronRight className="sp-table-arrow" size={16} />
+                    </button>
+                    <button
+                      className="sp-table-config-btn"
+                      onClick={() => openTableMapping(table.id)}
+                      title={`配置 ${table.name} 字段映射`}
+                      aria-label={`配置 ${table.name} 字段映射`}
+                      type="button"
+                    >
+                      <Settings size={14} />
                     </button>
                     {tables.length > 1 && (
                       <div className="sp-table-actions" role="group" aria-label={`${table.name} 排序操作`}>
@@ -480,54 +806,31 @@ export default function SidePanelApp() {
             </div>
             <h2>{content.title || '未命名网页'}</h2>
             <div className="sp-meta-row">
-              <span>{hostname(content.url)}</span>
+              <span>{getSourceHostname(content.url)}</span>
               {content.mainImage && <span>含图片</span>}
               {content.selectedText && <span>选中文本</span>}
             </div>
-            {(content.selectedText || content.content || content.description) && (
+            {pagePreview && (
               <>
                 <div className="sp-preview-label">内容预览</div>
                 <p className="sp-page-preview">
-                  {(content.selectedText || content.description || content.content || '').slice(0, 260)}
+                  {pagePreview}
                 </p>
               </>
             )}
           </section>
 
-          <section className="sp-update-section" aria-label="本次更新">
-            <div className="sp-update-head">
-              <span className="sp-update-badge">NEW</span>
-              <span className="sp-update-title">
-                <strong>新工作流上线</strong>
-                <small>资料先同步，网页再整理</small>
-              </span>
-            </div>
-            <div className="sp-update-items">
-              <button className="sp-update-item is-action" onClick={() => openOptions('#interop')} type="button">
-                <span className="sp-update-icon">
-                  <ArrowLeftRight size={15} />
-                </span>
-                <span className="sp-update-copy">
-                  <strong>Notion 和飞书互通</strong>
-                  <small>点开配置同步</small>
-                </span>
-                <ChevronRight size={15} />
-              </button>
-              <div className="sp-update-item is-ai">
-                <span className="sp-update-icon">
-                  <Sparkles size={15} />
-                </span>
-                <span className="sp-update-copy">
-                  <strong>AI 整理摘要</strong>
-                  <small>保存前自动建议</small>
-                </span>
-              </div>
-            </div>
-          </section>
+          <ExtensionUpdateCard
+            notice={updateNotice}
+            onDismissNotice={handleDismissUpdateNotice}
+            onOpenLibrary={() => setPanelView('library')}
+            onOpenTemplates={() => openOptions()}
+          />
+          {ratingInvitation}
         </main>
       )}
 
-      {panelState === 'ready' && content && metadata && panelStep === 'editor' && (
+      {panelState === 'ready' && panelView === 'capture' && content && metadata && panelStep === 'editor' && (
         <main className="sp-main">
           <section className="sp-section sp-context-section sp-page sp-editor-context">
             <div className="sp-compact-nav">
@@ -539,15 +842,15 @@ export default function SidePanelApp() {
             </div>
             <h2>{content.title || '未命名网页'}</h2>
             <div className="sp-meta-row">
-              <span>{hostname(content.url)}</span>
+              <span>{getSourceHostname(content.url)}</span>
               {selectedTable && <span>保存到：{selectedTable.name}</span>}
               {content.selectedText && <span>选中文本</span>}
             </div>
-            {(content.selectedText || content.content || content.description) && (
+            {pagePreview && (
               <>
                 <div className="sp-preview-label">内容预览</div>
                 <p className="sp-page-preview">
-                  {(content.selectedText || content.description || content.content || '').slice(0, 260)}
+                  {pagePreview}
                 </p>
               </>
             )}
@@ -557,51 +860,109 @@ export default function SidePanelApp() {
             <div className="sp-section-heading">
               <div className="sp-section-title">
                 <Sparkles size={16} />
-                <span>整理信息</span>
+                <span>AI 信息整理</span>
               </div>
-              <button
-                className="sp-ai-action"
-                onClick={handleAiRetry}
-                disabled={aiStatus.status === 'loading'}
-                type="button"
-                title="生成整理建议"
-                aria-label="生成整理建议"
-              >
-                {aiStatus.status === 'loading' ? <Loader2 className="sp-spin" size={13} /> : <RefreshCw size={13} />}
-                <span>{aiStatus.status === 'loading' ? '生成中' : '生成建议'}</span>
-              </button>
+              <div className="sp-ai-toolbar" role="group" aria-label="AI 信息整理操作">
+                <button
+                  className="sp-ai-action"
+                  onClick={handleAiRetry}
+                  disabled={aiStatus.status === 'loading'}
+                  type="button"
+                  title="AI 写入"
+                  aria-label="AI 写入"
+                >
+                  {aiStatus.status === 'loading' ? <Loader2 className="sp-spin" size={13} /> : <RefreshCw size={13} />}
+                  <span>{aiStatus.status === 'loading' ? '写入中' : 'AI 写入'}</span>
+                </button>
+                <button
+                  className={`sp-field-toggle ${isEditingFields ? 'is-active' : ''}`}
+                  onClick={toggleFieldEditing}
+                  type="button"
+                  title={isEditingFields ? '保存字段' : '调整字段'}
+                  aria-label={isEditingFields ? '保存字段' : '调整字段'}
+                >
+                  <Pencil size={13} />
+                  <span>{isEditingFields ? '保存字段' : '调整字段'}</span>
+                </button>
+                <button
+                  className="sp-ai-settings-btn"
+                  onClick={() => openOptions('#ai')}
+                  type="button"
+                  title="AI 功能设置"
+                  aria-label="AI 功能设置"
+                >
+                  <Settings size={13} />
+                  <span>AI 功能设置</span>
+                </button>
+              </div>
             </div>
             <div className={`sp-ai-status is-${aiStatus.status}`}>
               {aiStatus.status === 'loading' ? <Loader2 className="sp-spin" size={14} /> : <Sparkles size={14} />}
               <span>{aiStatus.message}</span>
             </div>
-            <label className="sp-field">
-              <span>摘要</span>
-              <textarea
-                value={content.description || ''}
-                onChange={event => setContent({ ...content, description: event.target.value })}
-                placeholder="例如：这篇文章介绍了某个趋势、方法或案例。可以直接修改后保存。"
-                rows={3}
-              />
-            </label>
-            <label className="sp-field">
-              <span>标签</span>
-              <input
-                value={metadata.tags.join(', ')}
-                onChange={event => updateMetadata({ tags: parseTags(event.target.value) })}
-                placeholder="例如：行业研究, 内容素材, 待读"
-              />
-            </label>
-            <label className="sp-field">
-              <span>资料类型</span>
-              <select value={metadata.contentType || '其他'} onChange={event => updateMetadata({ contentType: event.target.value as KnowledgeMetadata['contentType'] })}>
-                <option>阅读资料</option>
-                <option>行业研究</option>
-                <option>内容素材</option>
-                <option>工具文档</option>
-                <option>其他</option>
-              </select>
-            </label>
+            {isEditingFields && (
+              <div className="sp-field-editor" aria-label="整理字段设置">
+                <div className="sp-field-editor-head">
+                  <span>最多 {MAX_CLIP_FIELDS} 个字段；要写入飞书列，请在设置页选择「AI 写入字段」</span>
+                  <button className="sp-field-add-btn" onClick={addDraftField} disabled={draftClipFields.length >= MAX_CLIP_FIELDS || (selectedTable?.fieldMappings || []).some(mapping => mapping.sourceType === 'aiField')} type="button">
+                    <Plus size={13} />
+                    <span>新增</span>
+                  </button>
+                </div>
+                {(selectedTable?.fieldMappings || []).some(mapping => mapping.sourceType === 'aiField') && (
+                  <div className="sp-field-editor-note">
+                    <Sparkles size={13} />
+                    <span>这些字段会在保存时写入已配置的飞书列。</span>
+                  </div>
+                )}
+                {draftClipFields.map(field => (
+                  <div className="sp-field-editor-row" key={field.id}>
+                    <input
+                      value={field.label}
+                      onChange={event => updateDraftFieldLabel(field.id, event.target.value)}
+                      placeholder="字段名称"
+                    />
+                    <button
+                      className="sp-field-remove-btn"
+                      onClick={() => removeDraftField(field.id)}
+                      disabled={draftClipFields.length <= 1 || (selectedTable?.fieldMappings || []).some(mapping => mapping.sourceType === 'aiField')}
+                      title="删除字段"
+                      aria-label={`删除 ${field.label || '字段'}`}
+                      type="button"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {visibleClipFields.map(field => (
+              <label className="sp-field" key={field.id}>
+                <span>{field.label}</span>
+                {getEffectiveClipFieldType(field) === 'tags' ? (
+                  <input
+                    value={getFieldValue(field)}
+                    onChange={event => updateFieldValue(field, event.target.value)}
+                    placeholder="例如：行业研究, 内容素材, 待读"
+                  />
+                ) : getEffectiveClipFieldType(field) === 'contentType' ? (
+                  <select value={getFieldValue(field)} onChange={event => updateFieldValue(field, event.target.value)}>
+                    <option>阅读资料</option>
+                    <option>行业研究</option>
+                    <option>内容素材</option>
+                    <option>工具文档</option>
+                    <option>其他</option>
+                  </select>
+                ) : (
+                  <textarea
+                    value={getFieldValue(field)}
+                    onChange={event => updateFieldValue(field, event.target.value)}
+                    placeholder={getEffectiveClipFieldType(field) === 'summary' ? '例如：这篇文章介绍了某个趋势、方法或案例。可以直接修改后保存。' : `填写${field.label}`}
+                    rows={getEffectiveClipFieldType(field) === 'summary' ? 3 : 2}
+                  />
+                )}
+              </label>
+            ))}
             <details className="sp-advanced">
               <summary>更多整理信息</summary>
               <label className="sp-field">
@@ -620,6 +981,14 @@ export default function SidePanelApp() {
                   onChange={event => updateMetadata({ note: event.target.value })}
                   placeholder="写给自己的补充说明，可留空。"
                   rows={3}
+                />
+              </label>
+              <label className="sp-field">
+                <span>下次回顾</span>
+                <input
+                  type="date"
+                  value={metadata.reviewAt || ''}
+                  onChange={event => updateMetadata({ reviewAt: event.target.value })}
                 />
               </label>
             </details>
@@ -643,6 +1012,19 @@ export default function SidePanelApp() {
               </button>
             )}
 
+            {currentSavedRecord && (
+              <div className="sp-saved-notice" role="status">
+                <Clock size={15} />
+                <span>
+                  <strong>这页已保存过</strong>
+                  <small>
+                    {formatSavedAt(currentSavedRecord.savedAt)} 保存到 {currentSavedRecord.targetName}
+                    {currentSavedRecord.recordId ? ` · 记录 ${currentSavedRecord.recordId}` : ''}
+                  </small>
+                </span>
+              </div>
+            )}
+
             {saveResult && (
               <div className={`sp-result ${saveResult.success ? 'success' : 'error'}`}>
                 {saveResult.success ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
@@ -661,6 +1043,7 @@ export default function SidePanelApp() {
               </button>
             </div>
           </section>
+          {ratingInvitation}
         </main>
       )}
     </div>

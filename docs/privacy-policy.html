@@ -99,7 +99,7 @@
 <body>
     <div class="container">
         <h1>隐私政策</h1>
-        <p class="subtitle">最后更新日期：2026年5月14日</p>
+        <p class="subtitle">最后更新日期：2026年6月13日</p>
 
         <div class="highlight">
             <strong>重要提示：</strong>Save to Feishu（以下简称"本扩展"）帮助用户在浏览器侧栏中整理网页，并保存到飞书、Markdown，或在 Notion 与飞书之间同步资料。本隐私政策旨在向您说明我们如何收集、使用和保护您的信息。
@@ -112,9 +112,11 @@
         <ul>
             <li><strong>飞书应用凭证</strong>：您配置的 App ID 和 App Secret，用于访问飞书 API</li>
             <li><strong>Notion 连接码</strong>：您主动配置的 Notion 集成 Token，用于同步 Notion 数据库</li>
+            <li><strong>AI 服务配置</strong>：您主动配置的 AI API Key、模型名和接口地址，用于调用您选择的 AI 服务</li>
             <li><strong>表格配置信息</strong>：您设置的多维表格 ID、字段映射等配置</li>
             <li><strong>网页内容</strong>：您选择保存的网页标题、URL、正文内容和图片链接</li>
             <li><strong>整理信息</strong>：您在保存前填写或确认的摘要、标签、资料类型和备注</li>
+            <li><strong>本地使用状态</strong>：最近保存记录、成功保存次数和评分邀请状态，仅用于最近保存、待回顾和控制评分提示频率</li>
         </ul>
 
         <h3>1.2 我们不收集的信息</h3>
@@ -122,7 +124,7 @@
         <ul>
             <li>个人身份信息（姓名、邮箱、电话等）</li>
             <li>浏览器历史记录</li>
-            <li>用户行为数据或分析数据</li>
+            <li>上传到开发者服务器的用户行为数据或分析数据</li>
             <li>Cookie 或本地存储中的敏感数据</li>
             <li>任何与保存网页无关的信息</li>
         </ul>
@@ -134,16 +136,22 @@
         <ul>
             <li>将您选择的网页内容保存到您指定的飞书多维表格</li>
             <li>在您主动执行时，在 Notion 与飞书之间同步资料</li>
+            <li>在您主动使用 AI 信息整理时，按当前字段生成保存前建议</li>
             <li>存储您的配置偏好，提供更好的使用体验</li>
+            <li>在浏览器本地展示最近保存、待回顾和使用里程碑提示</li>
             <li>验证与飞书 API 的通信权限</li>
         </ul>
 
         <h3>2.2 数据存储</h3>
         <ul>
-            <li>所有配置信息仅存储在您的浏览器本地（Chrome Storage）</li>
+            <li>所有配置信息仅存储在您的浏览器本地（Chrome Storage），敏感连接信息会加密保存</li>
             <li>保存的网页内容直接传输到您的飞书表格，不经过我们的服务器</li>
             <li>Notion 同步数据直接在浏览器、飞书与 Notion 官方 API 之间传输，不经过我们的服务器</li>
-            <li>AI 整理建议仅在 Chrome 浏览器本地能力可用时运行，不需要云端 API key</li>
+            <li>AI 信息整理默认使用 Chrome 内置能力；如果您改用自己的 API Key，网页内容和字段要求会直接发送到您配置的 AI 服务，不经过我们的服务器</li>
+            <li>自有 AI API Key 仅存储在您的浏览器本地加密配置中</li>
+            <li>最近保存记录、成功保存次数和评分选择仅存储在您的浏览器本地</li>
+            <li>共享模板只包含字段结构和整理配置，不包含凭证、资料库标识、固定值或网页内容</li>
+            <li>问题反馈仅在您主动点击后打开 GitHub，不会自动附带当前网页内容或配置</li>
             <li>我们不会在任何服务器上存储您的数据</li>
         </ul>
 
@@ -151,7 +159,8 @@
         <p>我们承诺：</p>
         <ul>
             <li>不会向任何第三方出售、交易或转让您的信息</li>
-            <li>不会与任何第三方共享您的信息</li>
+            <li>不会将您的信息发送给扩展开发者服务器</li>
+            <li>仅在您主动保存、同步或使用自有 AI 服务时，将必要数据发送到您配置的飞书、Notion 或 AI 服务</li>
             <li>不会将您的信息用于广告或营销目的</li>
         </ul>
 
@@ -161,6 +170,7 @@
             <li>使用 Chrome 扩展的标准安全存储机制</li>
             <li>仅通过 HTTPS 与飞书 API 通信</li>
             <li>仅通过 HTTPS 与 Notion API 通信</li>
+            <li>自有 AI 模式下，仅按您填写的 HTTPS 接口地址发送整理请求</li>
             <li>不存储任何敏感凭证在代码或服务器中</li>
             <li>遵循最小权限原则，仅请求必要的权限</li>
         </ul>
@@ -182,6 +192,7 @@
             <li><strong>Notion API</strong>：用于在您配置后同步 Notion 数据库
                 <br>Notion 隐私政策：https://www.notion.so/help/security-and-privacy
             </li>
+            <li><strong>您配置的 AI 服务</strong>：仅在您切换到自有 API Key 模式后，用于生成 AI 信息整理结果。相关隐私条款以您选择的服务商为准。</li>
         </ul>
 
         <h2>7. 权限说明</h2>

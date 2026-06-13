@@ -4,6 +4,11 @@
  */
 
 import type { AppConfig, TableConfig, FeishuCredentials, NotionCredentials, InteropConfig } from '@/types';
+import { normalizeClipFields } from '@/utils/clipFields';
+import { normalizeSavedContentRecords } from '@/utils/savedContent';
+import { normalizeExtensionUpdateNotice } from '@/utils/updateNotice';
+import { normalizeProductEngagement } from '@/utils/engagement';
+import { normalizeAiProviderConfig } from '@/utils/aiProvider';
 
 /**
  * 验证飞书凭证对象
@@ -70,6 +75,11 @@ export function isValidAppConfig(obj: any): obj is AppConfig {
          obj.tables.every(isValidTableConfig) &&
          Array.isArray(obj.interopConfigs || []) &&
          (obj.interopConfigs || []).every(isValidInteropConfig) &&
+         Array.isArray(obj.clipFields || []) &&
+         Array.isArray(obj.savedContents || []) &&
+         (obj.productEngagement === undefined || obj.productEngagement === null || typeof obj.productEngagement === 'object') &&
+         (obj.updateNotice === undefined || obj.updateNotice === null || typeof obj.updateNotice === 'object') &&
+         (obj.aiProvider === undefined || obj.aiProvider === null || typeof obj.aiProvider === 'object') &&
          ['both', 'feishu', 'markdown', undefined].includes(obj.saveMode) &&
          typeof obj.version === 'string';
 }
@@ -139,7 +149,14 @@ export function repairConfig(obj: any): AppConfig | null {
         tableId: String(table.tableId || ''),
         tableUrl: String(table.tableUrl || ''),
         templateId: typeof table.templateId === 'string' ? table.templateId : undefined,
-        fieldMappings: Array.isArray(table.fieldMappings) ? table.fieldMappings : [],
+        fieldMappings: Array.isArray(table.fieldMappings) ? table.fieldMappings.map((mapping: any) => ({
+          feishuFieldId: String(mapping.feishuFieldId || ''),
+          feishuFieldName: String(mapping.feishuFieldName || ''),
+          sourceType: String(mapping.sourceType || ''),
+          staticValue: typeof mapping.staticValue === 'string' ? mapping.staticValue : undefined,
+          aiFieldId: typeof mapping.aiFieldId === 'string' ? mapping.aiFieldId : undefined,
+          aiFieldName: typeof mapping.aiFieldName === 'string' ? mapping.aiFieldName : undefined,
+        })) : [],
         createdAt: Number(table.createdAt) || Date.now(),
         updatedAt: Number(table.updatedAt) || Date.now(),
       }));
@@ -171,10 +188,16 @@ export function repairConfig(obj: any): AppConfig | null {
     if (!['both', 'feishu', 'markdown'].includes(obj.saveMode)) {
       obj.saveMode = 'feishu';
     }
+
+    obj.clipFields = normalizeClipFields(obj.clipFields);
+    obj.savedContents = normalizeSavedContentRecords(obj.savedContents);
+    obj.productEngagement = normalizeProductEngagement(obj.productEngagement);
+    obj.updateNotice = normalizeExtensionUpdateNotice(obj.updateNotice);
+    obj.aiProvider = normalizeAiProviderConfig(obj.aiProvider);
     
     // 修复 version 字段
     if (typeof obj.version !== 'string') {
-      obj.version = '0.5.0';
+      obj.version = '0.5.5';
     }
     
     // 再次验证

@@ -1,4 +1,10 @@
 import type { ExtractedPageContent, TableConfig, SaveResult, HtmlElementInfo, KnowledgeMetadata, SaveMode } from '@/types';
+import { generateMarkdownFilename } from '@/utils/markdownFilename';
+import {
+  createDefaultKnowledgeMetadata,
+  getSourceHostname,
+  parseKnowledgeTags,
+} from '@/utils/knowledgeMetadata';
 
 /**
  * 从 meta 标签获取内容
@@ -474,7 +480,7 @@ class FloatingPanel {
 
     // 提取页面内容
     this.content = extractPageContent();
-    this.metadata = this.buildDefaultMetadata(this.content);
+    this.metadata = createDefaultKnowledgeMetadata(this.content);
 
     // 加载表格配置
     try {
@@ -590,7 +596,7 @@ class FloatingPanel {
    * 渲染标题栏
    */
   private renderHeader(): string {
-    const title = this.selectedTable ? '整理后保存' : '网页知识剪藏';
+    const title = this.selectedTable ? '整理后保存' : '飞书知识库管理助手';
     return `
       <div class="sf-panel-header">
         <div class="sf-panel-brand">
@@ -704,38 +710,6 @@ class FloatingPanel {
     `;
   }
 
-  /**
-   * 安全获取 URL 的 hostname
-   * @param url - URL 字符串
-   * @returns hostname 或原始 URL
-   */
-  private getHostname(url: string): string {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return url;
-    }
-  }
-
-  private parseTags(value: string): string[] {
-    return value
-      .split(/[,，#\n]/)
-      .map(tag => tag.trim())
-      .filter(Boolean)
-      .slice(0, 12);
-  }
-
-  private buildDefaultMetadata(content: ExtractedPageContent): KnowledgeMetadata {
-    return {
-      tags: [],
-      source: this.getHostname(content.url).replace(/^www\./, ''),
-      status: '未处理',
-      excerpt: content.selectedText || content.description || '',
-      note: '',
-      reviewAt: '',
-    };
-  }
-
   private readMetadataFromPanel(): KnowledgeMetadata {
     if (!this.content) {
       return {
@@ -748,7 +722,7 @@ class FloatingPanel {
       };
     }
 
-    const fallback = this.metadata || this.buildDefaultMetadata(this.content);
+    const fallback = this.metadata || createDefaultKnowledgeMetadata(this.content);
     const tagsInput = this.panel?.querySelector<HTMLInputElement>('#sf-knowledge-tags');
     const statusInput = this.panel?.querySelector<HTMLSelectElement>('#sf-knowledge-status');
     const noteInput = this.panel?.querySelector<HTMLTextAreaElement>('#sf-knowledge-note');
@@ -756,7 +730,7 @@ class FloatingPanel {
 
     this.metadata = {
       ...fallback,
-      tags: this.parseTags(tagsInput?.value || ''),
+      tags: parseKnowledgeTags(tagsInput?.value || ''),
       status: statusInput?.value || fallback.status,
       note: noteInput?.value || '',
       reviewAt: reviewInput?.value || '',
@@ -781,9 +755,9 @@ class FloatingPanel {
   private renderSavePage(): string {
     if (!this.content || !this.selectedTable) return '';
 
-    const hostname = this.getHostname(this.content.url);
+    const hostname = getSourceHostname(this.content.url);
     const tableUrl = this.getTableUrl(this.selectedTable);
-    const metadata = this.metadata || this.buildDefaultMetadata(this.content);
+    const metadata = this.metadata || createDefaultKnowledgeMetadata(this.content);
     const saveButtonText = this.saveMode === 'both'
       ? '保存到飞书并下载 Markdown'
       : this.saveMode === 'markdown'
@@ -905,7 +879,7 @@ class FloatingPanel {
     this.panel.querySelector('#sf-btn-refresh')?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.content = extractPageContent();
-      this.metadata = this.buildDefaultMetadata(this.content);
+      this.metadata = createDefaultKnowledgeMetadata(this.content);
       this.render();
     });
 
@@ -1034,7 +1008,10 @@ class FloatingPanel {
       }
       if (this.saveMode !== 'feishu') {
         const markdown = this.buildMarkdown(this.content, htmlElements, metadata, result.documentUrl);
-        this.triggerDownload(markdown, this.buildMarkdownFilename(this.content.title));
+        this.triggerDownload(markdown, generateMarkdownFilename(this.content.title));
+      }
+      if (result.success && this.saveMode === 'markdown') {
+        this.recordMarkdownSave(metadata);
       }
       this.showResult(result.success ? result : {
         ...result,
@@ -1046,7 +1023,7 @@ class FloatingPanel {
     } catch (err) {
       const metadata = this.readMetadataFromPanel();
       const markdown = this.buildMarkdown(this.content, undefined, metadata);
-      this.triggerDownload(markdown, this.buildMarkdownFilename(this.content.title));
+      this.triggerDownload(markdown, generateMarkdownFilename(this.content.title));
       this.showResult({
         success: false,
         markdownFallback: true,
@@ -1064,15 +1041,27 @@ class FloatingPanel {
     try {
       const html = extractPageHtml();
       const htmlElements = parseHtmlToElements(html);
-      const markdown = this.buildMarkdown(this.content, htmlElements, this.metadata || this.buildDefaultMetadata(this.content));
-      const filename = this.buildMarkdownFilename(this.content.title);
+      const markdown = this.buildMarkdown(this.content, htmlElements, this.metadata || createDefaultKnowledgeMetadata(this.content));
+      const filename = generateMarkdownFilename(this.content.title);
       this.triggerDownload(markdown, filename);
     } catch (err) {
       // 降级：只使用纯文本内容
-      const markdown = this.buildMarkdown(this.content, undefined, this.metadata || this.buildDefaultMetadata(this.content));
-      const filename = this.buildMarkdownFilename(this.content.title);
+      const markdown = this.buildMarkdown(this.content, undefined, this.metadata || createDefaultKnowledgeMetadata(this.content));
+      const filename = generateMarkdownFilename(this.content.title);
       this.triggerDownload(markdown, filename);
     }
+    this.recordMarkdownSave(this.metadata || createDefaultKnowledgeMetadata(this.content));
+  }
+
+  private recordMarkdownSave(metadata: KnowledgeMetadata) {
+    if (!this.content) return;
+    chrome.runtime.sendMessage({
+      action: 'recordMarkdownSave',
+      content: this.content,
+      metadata,
+    }).catch(error => {
+      console.warn('[ContentScript] 记录 Markdown 保存次数失败:', error);
+    });
   }
 
   /**
@@ -1085,12 +1074,12 @@ class FloatingPanel {
     documentUrl?: string
   ): string {
     const lines: string[] = [];
-    const clipMetadata = metadata || this.buildDefaultMetadata(content);
+    const clipMetadata = metadata || createDefaultKnowledgeMetadata(content);
 
     lines.push('---');
     lines.push(`title: ${this.renderYamlValue(content.title)}`);
     lines.push(`url: ${this.renderYamlValue(content.url)}`);
-    lines.push(`source: ${this.renderYamlValue(clipMetadata.source || this.getHostname(content.url))}`);
+    lines.push(`source: ${this.renderYamlValue(clipMetadata.source || getSourceHostname(content.url))}`);
     lines.push(`saved_at: ${this.renderYamlValue(content.savedAt)}`);
     if (content.publishedAt) lines.push(`published_at: ${this.renderYamlValue(content.publishedAt)}`);
     if (documentUrl) lines.push(`feishu_doc_url: ${this.renderYamlValue(documentUrl)}`);
@@ -1230,19 +1219,6 @@ class FloatingPanel {
   private renderYamlValue(value: string | undefined): string {
     if (!value) return '""';
     return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
-  }
-
-  /**
-   * 生成 Markdown 文件名
-   */
-  private buildMarkdownFilename(title: string): string {
-    const sanitized = title
-      .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim()
-      .slice(0, 80);
-    return `${sanitized || 'page-content'}.md`;
   }
 
   /**

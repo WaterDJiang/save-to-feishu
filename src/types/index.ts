@@ -13,6 +13,17 @@ export interface NotionCredentials {
   integrationToken: string;
 }
 
+export type AiProviderMode = 'chromeBuiltIn' | 'customApi';
+export type AiProviderType = 'gemini' | 'openaiCompatible';
+
+export interface AiProviderConfig {
+  mode: AiProviderMode;
+  provider: AiProviderType;
+  apiKey: string;
+  baseUrl?: string;
+  model?: string;
+}
+
 /**
  * 字段映射来源类型
  */
@@ -30,6 +41,8 @@ export type MappingSourceType =
   | 'status'
   | 'contentType'
   | 'excerpt'
+  | 'aiField'
+  | 'customFields'
   | 'note'
   | 'reviewAt'
   | 'static';
@@ -42,6 +55,8 @@ export interface TableFieldMapping {
   feishuFieldName: string;
   sourceType: MappingSourceType;
   staticValue?: string;
+  aiFieldId?: string;
+  aiFieldName?: string;
 }
 
 /**
@@ -67,8 +82,19 @@ export interface AppConfig {
   notion: NotionCredentials;
   tables: TableConfig[];
   interopConfigs: InteropConfig[];
+  clipFields: ClipFieldConfig[];
+  savedContents: SavedContentRecord[];
+  productEngagement: ProductEngagement;
+  updateNotice: ExtensionUpdateNotice | null;
+  aiProvider: AiProviderConfig;
   saveMode: SaveMode;
   version: string;
+}
+
+export interface ProductEngagement {
+  successfulSaveCount: number;
+  ratingCompleted: boolean;
+  lastRatingPromptSaveCount: number;
 }
 
 export type SaveMode = 'both' | 'feishu' | 'markdown';
@@ -89,6 +115,14 @@ export interface ExtractedPageContent {
 
 export type KnowledgeTemplateId = 'readingInbox' | 'researchLibrary' | 'contentIdeas';
 
+export type ClipFieldType = 'summary' | 'tags' | 'contentType' | 'text';
+
+export interface ClipFieldConfig {
+  id: string;
+  label: string;
+  type: ClipFieldType;
+}
+
 /**
  * 剪藏时补充的知识整理信息
  */
@@ -100,6 +134,7 @@ export interface KnowledgeMetadata {
   excerpt?: string;
   note?: string;
   reviewAt?: string;
+  customFields?: Record<string, string>;
 }
 
 /**
@@ -145,6 +180,46 @@ export interface SaveResult {
   tableUrl?: string;
   documentUrl?: string;
   markdownFallback?: boolean;
+}
+
+export type SavedContentTargetType = 'feishu' | 'markdown';
+
+export interface SavedContentTarget {
+  type: SavedContentTargetType;
+  id: string;
+  name: string;
+  tableConfigId?: string;
+  appToken?: string;
+  tableId?: string;
+  tableUrl?: string;
+}
+
+export interface SavedContentRecord {
+  key: string;
+  url: string;
+  normalizedUrl: string;
+  title: string;
+  savedAt: string;
+  status?: string;
+  reviewAt?: string;
+  targetType: SavedContentTargetType;
+  targetId: string;
+  targetName: string;
+  tableConfigId?: string;
+  appToken?: string;
+  tableId?: string;
+  tableUrl?: string;
+  recordId?: string;
+  documentUrl?: string;
+}
+
+export interface ExtensionUpdateNotice {
+  version: string;
+  previousVersion?: string;
+  createdAt: number;
+  dismissed: boolean;
+  title: string;
+  highlights: string[];
 }
 
 /**

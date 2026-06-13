@@ -1,8 +1,13 @@
-import type { AppConfig, TableConfig, FeishuCredentials, NotionCredentials, SaveMode, InteropConfig } from '@/types';
+import type { AiProviderConfig, AppConfig, TableConfig, FeishuCredentials, NotionCredentials, SaveMode, InteropConfig, ClipFieldConfig, ExtensionUpdateNotice, ProductEngagement, SavedContentRecord } from '@/types';
 import { saveEncryptedToStorage, loadEncryptedFromStorage, clearEncryptedStorage } from '@/utils/encryption';
 import { parseAndValidateConfig, repairConfig } from '@/utils/validator';
+import { getDefaultClipFields, normalizeClipFields } from '@/utils/clipFields';
+import { normalizeSavedContentRecords, upsertSavedContentRecord } from '@/utils/savedContent';
+import { dismissExtensionUpdateNotice, normalizeExtensionUpdateNotice } from '@/utils/updateNotice';
+import { DEFAULT_AI_PROVIDER_CONFIG, normalizeAiProviderConfig, sanitizeAiProviderConfigForExport } from '@/utils/aiProvider';
+import { completeRatingPrompt, DEFAULT_PRODUCT_ENGAGEMENT, dismissRatingPrompt, normalizeProductEngagement, recordSuccessfulSave } from '@/utils/engagement';
 
-const CONFIG_VERSION = '0.5.0';
+const CONFIG_VERSION = '0.5.5';
 
 /**
  * 获取默认配置
@@ -18,6 +23,11 @@ function getDefaultConfig(): AppConfig {
     },
     tables: [],
     interopConfigs: [],
+    clipFields: getDefaultClipFields(),
+    savedContents: [],
+    productEngagement: { ...DEFAULT_PRODUCT_ENGAGEMENT },
+    updateNotice: null,
+    aiProvider: { ...DEFAULT_AI_PROVIDER_CONFIG },
     saveMode: 'feishu',
     version: CONFIG_VERSION,
   };
@@ -46,6 +56,11 @@ export async function loadConfig(): Promise<AppConfig> {
       ...((data as Partial<AppConfig>).notion || {}),
     },
     interopConfigs: (data as Partial<AppConfig>).interopConfigs || [],
+    clipFields: normalizeClipFields((data as Partial<AppConfig>).clipFields),
+    savedContents: normalizeSavedContentRecords((data as Partial<AppConfig>).savedContents),
+    productEngagement: normalizeProductEngagement((data as Partial<AppConfig>).productEngagement),
+    updateNotice: normalizeExtensionUpdateNotice((data as Partial<AppConfig>).updateNotice),
+    aiProvider: normalizeAiProviderConfig((data as Partial<AppConfig>).aiProvider),
     saveMode: (data as Partial<AppConfig>).saveMode || 'feishu',
   };
 }
@@ -87,6 +102,81 @@ export async function saveSaveMode(saveMode: SaveMode): Promise<void> {
 export async function getSaveMode(): Promise<SaveMode> {
   const config = await loadConfig();
   return config.saveMode || 'feishu';
+}
+
+export async function getClipFields(): Promise<ClipFieldConfig[]> {
+  const config = await loadConfig();
+  return normalizeClipFields(config.clipFields);
+}
+
+export async function saveClipFields(fields: ClipFieldConfig[]): Promise<void> {
+  const config = await loadConfig();
+  config.clipFields = normalizeClipFields(fields);
+  await saveConfig(config);
+}
+
+export async function getAiProviderConfig(): Promise<AiProviderConfig> {
+  const config = await loadConfig();
+  return normalizeAiProviderConfig(config.aiProvider);
+}
+
+export async function saveAiProviderConfig(aiProvider: AiProviderConfig): Promise<void> {
+  const config = await loadConfig();
+  config.aiProvider = normalizeAiProviderConfig(aiProvider);
+  await saveConfig(config);
+}
+
+export async function getSavedContentRecords(): Promise<SavedContentRecord[]> {
+  const config = await loadConfig();
+  return normalizeSavedContentRecords(config.savedContents);
+}
+
+export async function rememberSavedContent(record: SavedContentRecord): Promise<SavedContentRecord[]> {
+  const config = await loadConfig();
+  config.savedContents = upsertSavedContentRecord(
+    normalizeSavedContentRecords(config.savedContents),
+    record
+  );
+  config.productEngagement = recordSuccessfulSave(config.productEngagement);
+  await saveConfig(config);
+  return config.savedContents;
+}
+
+export async function getProductEngagement(): Promise<ProductEngagement> {
+  const config = await loadConfig();
+  return normalizeProductEngagement(config.productEngagement);
+}
+
+export async function dismissRatingInvitation(): Promise<ProductEngagement> {
+  const config = await loadConfig();
+  config.productEngagement = dismissRatingPrompt(config.productEngagement);
+  await saveConfig(config);
+  return config.productEngagement;
+}
+
+export async function completeRatingInvitation(): Promise<ProductEngagement> {
+  const config = await loadConfig();
+  config.productEngagement = completeRatingPrompt(config.productEngagement);
+  await saveConfig(config);
+  return config.productEngagement;
+}
+
+export async function getExtensionUpdateNotice(): Promise<ExtensionUpdateNotice | null> {
+  const config = await loadConfig();
+  const notice = normalizeExtensionUpdateNotice(config.updateNotice);
+  return notice && !notice.dismissed ? notice : null;
+}
+
+export async function saveExtensionUpdateNotice(notice: ExtensionUpdateNotice | null): Promise<void> {
+  const config = await loadConfig();
+  config.updateNotice = normalizeExtensionUpdateNotice(notice);
+  await saveConfig(config);
+}
+
+export async function dismissCurrentUpdateNotice(): Promise<void> {
+  const config = await loadConfig();
+  config.updateNotice = dismissExtensionUpdateNotice(normalizeExtensionUpdateNotice(config.updateNotice));
+  await saveConfig(config);
 }
 
 /**
@@ -182,6 +272,7 @@ export async function exportConfig(includeSecret: boolean = false): Promise<stri
         ...config.notion,
         integrationToken: '',
       },
+      aiProvider: sanitizeAiProviderConfigForExport(config.aiProvider),
     }, null, 2);
   }
   

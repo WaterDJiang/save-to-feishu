@@ -25,9 +25,19 @@ import {
   ArrowLeftRight,
 } from 'lucide-react';
 import type { ExtractedPageContent, TableConfig, SaveResult, HtmlElementInfo, KnowledgeMetadata, SaveMode } from '@/types';
-import { getSaveMode, getTableConfigs, saveTableConfigs } from '@/services/storageService';
+import { getSaveMode, getTableConfigs, rememberSavedContent, saveTableConfigs } from '@/services/storageService';
 import { saveToFeishu } from '@/services/feishuService';
 import { generateMarkdown, generateMarkdownFilename, downloadMarkdown } from '@/utils/markdownGenerator';
+import {
+  buildFeishuSavedContentTarget,
+  buildMarkdownSavedContentTarget,
+  createSavedContentRecord,
+} from '@/utils/savedContent';
+import {
+  createDefaultKnowledgeMetadata,
+  getSourceHostname,
+  parseKnowledgeTags,
+} from '@/utils/knowledgeMetadata';
 
 /**
  * Apple 风格浮窗 - 保存到飞书
@@ -100,19 +110,6 @@ function TableListItem({
   );
 }
 
-/**
- * 安全获取 URL 的 hostname
- * @param url - URL 字符串
- * @returns hostname 或原始 URL
- */
-function getHostname(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return url;
-  }
-}
-
 function getTableUrl(table: TableConfig): string {
   if (table?.tableUrl && table.tableUrl.trim()) {
     return table.tableUrl.trim();
@@ -121,29 +118,6 @@ function getTableUrl(table: TableConfig): string {
     return `https://feishu.cn/base/${table.appToken}?table=${table.tableId}`;
   }
   return '';
-}
-
-function getDefaultSource(url: string): string {
-  return getHostname(url).replace(/^www\./, '');
-}
-
-function parseTags(value: string): string[] {
-  return value
-    .split(/[,，#\n]/)
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-    .slice(0, 12);
-}
-
-function buildDefaultMetadata(content: ExtractedPageContent): KnowledgeMetadata {
-  return {
-    tags: [],
-    source: getDefaultSource(content.url),
-    status: '未处理',
-    excerpt: content.selectedText || content.description || '',
-    note: '',
-    reviewAt: '',
-  };
 }
 
 async function getHtmlElementsFromActiveTab(): Promise<HtmlElementInfo[] | undefined> {
@@ -272,7 +246,7 @@ function ContentPreview({ content }: { content: ExtractedPageContent }) {
         <div className="sf-preview-meta">
           <div className="sf-meta-item">
             <Link2 size={12} strokeWidth={1.5} />
-            <span className="sf-truncate">{getHostname(content.url)}</span>
+            <span className="sf-truncate">{getSourceHostname(content.url)}</span>
           </div>
           {content.mainImage && (
             <div className="sf-meta-badge">
@@ -326,7 +300,7 @@ function KnowledgeFields({
           <span><Tags size={13} strokeWidth={1.5} /> 标签</span>
           <input
             value={metadata.tags.join(', ')}
-            onChange={(event) => onChange({ ...metadata, tags: parseTags(event.target.value) })}
+            onChange={(event) => onChange({ ...metadata, tags: parseKnowledgeTags(event.target.value) })}
             placeholder="行业研究, 内容素材"
           />
         </label>
@@ -515,7 +489,7 @@ function PopupApp() {
           savedAt: new Date().toISOString(),
         };
         setContent(extracted);
-        setMetadata(buildDefaultMetadata(extracted));
+        setMetadata(createDefaultKnowledgeMetadata(extracted));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '提取内容失败');
@@ -555,7 +529,7 @@ function PopupApp() {
     setSaveResult(null);
 
     try {
-      const clipMetadata = metadata || buildDefaultMetadata(content);
+      const clipMetadata = metadata || createDefaultKnowledgeMetadata(content);
       const htmlElements = await getHtmlElementsFromActiveTab();
       let result: SaveResult = { success: true };
       if (saveMode !== 'markdown') {
@@ -568,6 +542,16 @@ function PopupApp() {
         });
         downloadMarkdown(markdown, generateMarkdownFilename(content.title));
       }
+      if (result.success) {
+        await rememberSavedContent(createSavedContentRecord({
+          content,
+          target: saveMode === 'markdown'
+            ? buildMarkdownSavedContentTarget()
+            : buildFeishuSavedContentTarget(selectedTable),
+          result,
+          metadata: clipMetadata,
+        }));
+      }
       setSaveResult(result.success ? result : {
         ...result,
         markdownFallback: true,
@@ -576,7 +560,7 @@ function PopupApp() {
           : result.error,
       });
     } catch (err) {
-      const clipMetadata = metadata || buildDefaultMetadata(content);
+      const clipMetadata = metadata || createDefaultKnowledgeMetadata(content);
       const markdown = generateMarkdown(content, undefined, { metadata: clipMetadata });
       downloadMarkdown(markdown, generateMarkdownFilename(content.title));
       setSaveResult({
@@ -595,10 +579,11 @@ function PopupApp() {
   const handleSaveAsMarkdown = async () => {
     if (!content) return;
 
+    const clipMetadata = metadata || createDefaultKnowledgeMetadata(content);
     try {
       const htmlElements = await getHtmlElementsFromActiveTab();
       const markdown = generateMarkdown(content, htmlElements, {
-        metadata: metadata || buildDefaultMetadata(content),
+        metadata: clipMetadata,
       });
       const filename = generateMarkdownFilename(content.title);
       downloadMarkdown(markdown, filename);
@@ -606,11 +591,17 @@ function PopupApp() {
       console.error('保存 Markdown 失败:', err);
       // 降级：只使用纯文本内容
       const markdown = generateMarkdown(content, undefined, {
-        metadata: metadata || buildDefaultMetadata(content),
+        metadata: clipMetadata,
       });
       const filename = generateMarkdownFilename(content.title);
       downloadMarkdown(markdown, filename);
     }
+
+    await rememberSavedContent(createSavedContentRecord({
+      content,
+      target: buildMarkdownSavedContentTarget(),
+      metadata: clipMetadata,
+    }));
   };
 
   /**

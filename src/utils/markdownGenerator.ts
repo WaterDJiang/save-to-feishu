@@ -1,8 +1,11 @@
-import type { ExtractedPageContent, HtmlElementInfo, KnowledgeMetadata } from '@/types';
+import type { ClipFieldConfig, ExtractedPageContent, HtmlElementInfo, KnowledgeMetadata } from '@/types';
+import { getEffectiveClipFieldType, normalizeClipFields } from '@/utils/clipFields';
+export { generateMarkdownFilename } from '@/utils/markdownFilename';
 
 export interface MarkdownOptions {
   metadata?: KnowledgeMetadata;
   documentUrl?: string;
+  clipFields?: ClipFieldConfig[];
 }
 
 function escapeYaml(value: string): string {
@@ -12,6 +15,14 @@ function escapeYaml(value: string): string {
 function renderYamlValue(value: string | undefined): string {
   if (!value) return '""';
   return `"${escapeYaml(value)}"`;
+}
+
+function getClipFieldValue(field: ClipFieldConfig, content: ExtractedPageContent, metadata?: KnowledgeMetadata): string {
+  const type = getEffectiveClipFieldType(field);
+  if (type === 'summary') return content.description || '';
+  if (type === 'tags') return metadata?.tags?.join(', ') || '';
+  if (type === 'contentType') return metadata?.contentType || '';
+  return metadata?.customFields?.[field.id] || '';
 }
 
 /**
@@ -27,6 +38,7 @@ export function generateMarkdown(
 ): string {
   const lines: string[] = [];
   const metadata = options.metadata;
+  const clipFields = normalizeClipFields(options.clipFields);
 
   lines.push('---');
   lines.push(`title: ${renderYamlValue(content.title)}`);
@@ -58,6 +70,17 @@ export function generateMarkdown(
   if (metadata?.excerpt) {
     lines.push(`excerpt: ${renderYamlValue(metadata.excerpt)}`);
   }
+  const customFields = clipFields
+    .filter(field => getEffectiveClipFieldType(field) === 'text')
+    .map(field => ({ label: field.label, value: getClipFieldValue(field, content, metadata) }))
+    .filter(field => field.value.trim());
+  if (customFields.length > 0) {
+    lines.push('custom_fields:');
+    customFields.forEach(field => {
+      lines.push(`  - label: ${renderYamlValue(field.label)}`);
+      lines.push(`    value: ${renderYamlValue(field.value)}`);
+    });
+  }
   lines.push('---');
   lines.push('');
 
@@ -69,9 +92,6 @@ export function generateMarkdown(
   const metaLines: string[] = [];
   if (content.url) {
     metaLines.push(`- **链接**: ${content.url}`);
-  }
-  if (content.description) {
-    metaLines.push(`- **摘要**: ${content.description}`);
   }
   if (content.selectedText) {
     metaLines.push('- **剪藏范围**: 选中文本');
@@ -85,12 +105,10 @@ export function generateMarkdown(
   if (metadata?.status) {
     metaLines.push(`- **状态**: ${metadata.status}`);
   }
-  if (metadata?.contentType) {
-    metaLines.push(`- **资料类型**: ${metadata.contentType}`);
-  }
-  if (metadata?.tags?.length) {
-    metaLines.push(`- **标签**: ${metadata.tags.join(', ')}`);
-  }
+  clipFields.forEach(field => {
+    const value = getClipFieldValue(field, content, metadata);
+    if (value) metaLines.push(`- **${field.label}**: ${value}`);
+  });
   if (options.documentUrl) {
     metaLines.push(`- **飞书文档**: ${options.documentUrl}`);
   }
@@ -235,19 +253,6 @@ function getHostname(url: string): string {
   } catch {
     return url;
   }
-}
-
-/**
- * 生成 Markdown 文件名（基于标题，清理非法字符）
- */
-export function generateMarkdownFilename(title: string): string {
-  const sanitized = title
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .trim()
-    .slice(0, 80);
-  return `${sanitized || 'page-content'}.md`;
 }
 
 /**

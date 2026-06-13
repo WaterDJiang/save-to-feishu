@@ -1,26 +1,52 @@
 # Dependencies
-node_modules
 .pnp
 .pnp.js
+node_modules/
 
 # Build outputs
-dist
-dist-ssr
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
 *.local
-
-# Chrome Extension packaging
-*.crx
-*.pem
-save-to-feishu-chrome-store.zip
 
 # Environment variables
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+
+# Chrome extension packaging and release archives
+*.crx
+*.pem
+*.zip
+release/
+
+# Logs
+*.log
+lerna-debug.log*
+logs/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+.nyc_output/
+coverage/
+
+# Temporary files
+.cache/
+.eslintcache
+.history/
+*.bak
+*.orig
+*.rej
+*.temp
+*.tmp
 
 # IDE
-.vscode
-.idea
+.idea/
+.vscode/
 *.swp
 *.swo
 *~
@@ -34,25 +60,18 @@ save-to-feishu-chrome-store.zip
 ehthumbs.db
 Thumbs.db
 
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# Testing
-coverage
-.nyc_output
-
-# Temporary files
-*.tmp
-*.temp
-.cache
-
-# Reference materials (if not needed in repo)
+# Reference materials
 参考/
-dist.zip
-*.zip
+AGENTS.md
+
+# Internal docs
+docs/chrome-store-privacy-form.md
+docs/chrome-web-store-listing.md
+docs/componentization-refactor-log.md
+docs/componentization-refactor-plan.md
+docs/image/
+docs/image/参考图片/
+docs/product-growth-log.md
+docs/product-growth-plan.md
+docs/产品文档.md
+docs/解决过程总结.md

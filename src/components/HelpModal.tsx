@@ -204,10 +204,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
             </div>
           </section>
 
-          {/* AI 整理 */}
+          {/* AI 信息整理 */}
           <section className="help-section">
-            <h3>✨ 浏览器本地整理建议</h3>
-            <p className="help-section-desc">在支持 Chrome 内置 AI 的浏览器中，侧栏会自动给出摘要、标签和资料类型。它只是保存前的建议，你可以直接修改。</p>
+            <h3>✨ AI 信息整理建议</h3>
+            <p className="help-section-desc">默认使用 Chrome 内置 AI 给出摘要、标签和资料类型。你也可以在设置页填写自己的 API Key，使用自己的 AI 服务。</p>
             <div className="help-step">
               <h4>使用方式</h4>
               <ol>
@@ -217,7 +217,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                 <li>点击「保存到飞书」或「下载 Markdown」</li>
               </ol>
               <div className="help-tip">
-                <strong>说明：</strong>这个能力使用浏览器本地能力，不需要填写 OpenAI、豆包或其他云端 API key。当前 Chrome 暂不支持时，仍然可以手动填写并保存。
+                <strong>说明：</strong>默认模式不需要 API Key；自有 API 模式下，Key 只保存在本机，网页内容会发送给你配置的 AI 服务，插件开发者服务器不参与。
               </div>
             </div>
           </section>
@@ -292,8 +292,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                 <p>保存前可以补充标签、资料类型和个人备注，方便以后筛选</p>
               </div>
               <div className="help-tip-card">
-                <h4>✨ 本地整理建议</h4>
-                <p>Chrome 支持时会自动给出摘要和标签，不支持也不影响手动保存</p>
+                <h4>✨ AI 信息整理</h4>
+                <p>默认使用 Chrome 内置 AI，也可填写自己的 API Key 使用自有 AI 服务</p>
               </div>
               <div className="help-tip-card">
                 <h4>🔁 Notion 与飞书同步</h4>
@@ -328,7 +328,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                 <strong>Notion 连接码：</strong>Notion 连接码同样只保存在本地，导出设置时默认不会包含
               </li>
               <li>
-                <strong>本地 AI：</strong>整理建议只在浏览器支持时运行，不需要额外 API key，也不会把内容发给插件开发者服务器
+                <strong>AI 信息整理：</strong>默认使用 Chrome 内置 AI；如果改用自己的 API Key，Key 只保存在本地，整理请求直接发送到你配置的 AI 服务
               </li>
             </ul>
           </section>
@@ -459,15 +459,30 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
             </div>
           </section>
 
+          <section className="help-section">
+            <h3>🗂️ 最近保存、待回顾与共享模板</h3>
+            <ul>
+              <li>点击侧栏顶部的「最近保存与待回顾」，可以查看最近剪藏和已经到回顾日期的资料。</li>
+              <li>保存前在「更多整理信息」中设置下次回顾日期，资料到期后会进入待回顾列表。</li>
+              <li>在资料库设置中点击「复制当前模板」，可以把字段结构分享给同事。</li>
+              <li>共享模板不包含飞书凭证、Table ID、资料库链接、固定值或已保存网页内容。</li>
+              <li>导入共享模板后，仍需选择自己的飞书表格、读取列名并主动保存设置。</li>
+            </ul>
+          </section>
+
           {/* 联系支持 */}
           <section className="help-section help-section-contact">
             <h3>📞 需要帮助？</h3>
             <p>如果您遇到其他问题，可以：</p>
             <ul>
+              <li>点击侧栏顶部或设置页左下角的「问题反馈」</li>
               <li>查看飞书开放平台文档：<a href="https://open.feishu.cn/document" target="_blank" rel="noopener noreferrer">https://open.feishu.cn/document</a></li>
               <li>检查浏览器控制台（F12）查看详细错误信息</li>
               <li>尝试重新安装插件或清除浏览器缓存</li>
             </ul>
+            <div className="help-tip">
+              反馈入口只会预填插件版本和 Chrome 版本，不会自动附带当前网页地址、网页内容、飞书配置或密钥。
+            </div>
           </section>
         </div>
         

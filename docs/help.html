@@ -233,7 +233,7 @@
             </ol>
         </div>
 
-        <h2>✨ 浏览器本地整理建议</h2>
+        <h2>✨ AI 信息整理</h2>
 
         <div class="step">
             <h3><span class="step-number">1</span>自动生成保存前建议</h3>
@@ -241,13 +241,14 @@
                 <li>打开网页后点击扩展图标</li>
                 <li>侧栏会读取当前网页标题、链接、正文和选中文本</li>
                 <li>如果当前 Chrome 支持内置 AI，插件会自动生成摘要、标签和资料类型</li>
+                <li>也可以在「AI 功能设置」中填写自己的 API Key，使用自有 AI 服务</li>
                 <li>这些内容只是建议，你可以修改后再保存</li>
             </ol>
         </div>
 
         <div class="tip">
-            <div class="tip-title">说明：不需要额外 API key</div>
-            <p>第一版 AI 整理使用 Chrome 浏览器本地能力，不需要填写 OpenAI、豆包或 Claude 的 API key，也不会把网页正文发送到插件开发者服务器。当前 Chrome 暂不支持时，侧栏会提示可以手动填写，保存流程不受影响。</p>
+            <div class="tip-title">说明：默认不需要 API Key</div>
+            <p>默认模式使用 Chrome 内置 AI，不需要填写 API Key。自有 API 模式下，Key 只保存在本机，网页内容会发送给您配置的 AI 服务，插件开发者服务器不参与。当前 Chrome 暂不支持时，仍可手动填写并保存。</p>
         </div>
 
         <h2>🔄 Notion 与飞书同步</h2>
@@ -326,6 +327,16 @@
             <p>如果你同时使用 Notion 和飞书，可以为不同资料库建立多个同步规则，例如"Notion 选题库 → 飞书团队表"或"飞书研究资料 → Notion 个人库"。</p>
         </div>
 
+        <div class="tip">
+            <div class="tip-title">💡 提示：最近保存与待回顾</div>
+            <p>点击侧栏顶部的“最近保存与待回顾”可以查看最近剪藏。保存前设置“下次回顾”日期后，到期资料会集中显示在待回顾列表。</p>
+        </div>
+
+        <div class="tip">
+            <div class="tip-title">💡 提示：共享资料库模板</div>
+            <p>在资料库设置中复制当前模板代码，可以把字段结构分享给同事。模板不包含飞书凭证、Table ID、资料库链接、固定值或已保存网页内容；接收者仍需绑定自己的表格并主动保存。</p>
+        </div>
+
         <h2>⚠️ 常见问题</h2>
 
         <div class="faq-item">
@@ -396,8 +407,10 @@
             <ul>
                 <li>你的 App ID 和 App Secret 仅存储在本地浏览器中</li>
                 <li>Notion 连接码同样仅存储在本地浏览器中，导出设置时默认不会包含</li>
-                <li>AI 整理只在浏览器本地能力可用时运行，不需要额外 API key</li>
-                <li>所有数据直接发送到您的飞书表格，不经过第三方服务器</li>
+                <li>默认 AI 整理使用 Chrome 内置能力；自有 API Key 只保存在本地</li>
+                <li>最近保存记录、保存次数和评分选择只保存在浏览器本地</li>
+                <li>达到使用里程碑后的评分邀请可以延后，不会阻塞保存流程</li>
+                <li>保存和同步数据直接发送到您配置的飞书、Notion 或 AI 服务，不经过插件开发者服务器</li>
                 <li>建议不要将连接密钥分享给他人</li>
                 <li>定期检查飞书应用权限设置</li>
             </ul>
@@ -407,9 +420,11 @@
 
         <p>如果您在使用过程中遇到问题，或有功能建议，欢迎联系我们：</p>
         <ul>
+            <li>插件侧栏顶部或设置页左下角：点击“问题反馈”，自动填写插件版本和 Chrome 版本</li>
             <li>GitHub Issues：<a href="https://github.com/WaterDJiang/save-to-feishu/issues" target="_blank">提交问题</a></li>
             <li>项目主页：<a href="https://github.com/WaterDJiang/save-to-feishu" target="_blank">GitHub 项目</a></li>
         </ul>
+        <p>为保护隐私，反馈入口不会自动附带当前网页地址、网页内容、飞书配置或密钥。请只补充您愿意公开的信息。</p>
 
         <div class="footer">
             <p>© 2026 Save to Feishu. 保留所有权利。</p>

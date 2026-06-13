@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings,
+  Bot,
   Database,
   Download,
   Plus,
@@ -21,6 +22,7 @@ import {
   Eye,
   EyeOff,
   HelpCircle,
+  MessageSquareWarning,
   ArrowLeftRight,
   KeyRound,
 } from 'lucide-react';
@@ -35,6 +37,8 @@ import type {
   FeishuField,
   TableFieldMapping,
   SaveMode,
+  ClipFieldConfig,
+  AiProviderConfig,
 } from '@/types';
 import {
   getFeishuCredentials,
@@ -42,6 +46,10 @@ import {
   getNotionCredentials,
   saveNotionCredentials,
   getSaveMode,
+  getClipFields,
+  getAiProviderConfig,
+  saveAiProviderConfig,
+  saveClipFields,
   saveSaveMode,
   getTableConfigs,
   saveTableConfig,
@@ -56,13 +64,26 @@ import {
   testFeishuConnection,
   getTableFields,
 } from '@/services/feishuService';
+import { testAiProviderConnection } from '@/services/aiService';
 import { getFeishuInteropSchema, syncInteropConfig } from '@/services/interopService';
 import { getNotionDatabaseSchema, listNotionDatabases, testNotionConnection } from '@/services/notionService';
 import { HelpModal } from '@/components/HelpModal';
 import { FieldHelp } from '@/components/FieldHelp';
+import { TemplateSharingPanel } from '@/options/components/TemplateSharingPanel';
 import { KNOWLEDGE_TEMPLATES } from '@/utils/knowledgeTemplates';
+import { normalizeClipFields } from '@/utils/clipFields';
+import { DEFAULT_AI_PROVIDER_CONFIG, normalizeAiProviderConfig } from '@/utils/aiProvider';
+import { buildOptionsHash, parseOptionsHash } from '@/utils/optionsRoute';
+import { buildFeedbackIssueUrl } from '@/utils/feedback';
+import {
+  createSharedKnowledgeTemplate,
+  encodeSharedKnowledgeTemplate,
+  matchSharedTemplateMappings,
+  parseSharedKnowledgeTemplate,
+  type SharedKnowledgeTemplate,
+} from '@/utils/templateSharing';
 
-type ViewType = 'feishu' | 'tables' | 'interop' | 'importExport';
+type ViewType = 'feishu' | 'tables' | 'ai' | 'interop' | 'importExport';
 
 /**
  * 侧边栏导航项组件
@@ -242,6 +263,176 @@ function FeishuConfigView({
   );
 }
 
+function AiConfigView({
+  config,
+  setConfig,
+  onSave,
+  onTest,
+  isTesting,
+  testResult,
+}: {
+  config: AiProviderConfig;
+  setConfig: (config: AiProviderConfig) => void;
+  onSave: () => void;
+  onTest: () => void;
+  isTesting: boolean;
+  testResult: { success: boolean; message: string } | null;
+}) {
+  const [showKey, setShowKey] = useState(false);
+  const normalized = normalizeAiProviderConfig(config);
+  const isCustomApi = normalized.mode === 'customApi';
+
+  const updateConfig = (patch: Partial<AiProviderConfig>) => {
+    setConfig(normalizeAiProviderConfig({ ...normalized, ...patch }));
+  };
+
+  return (
+    <div className="config-section">
+      <div className="config-header">
+        <div className="config-icon">
+          <Bot size={24} />
+        </div>
+        <div className="config-title-group">
+          <h2 className="config-title">AI 功能设置</h2>
+          <p className="config-subtitle">默认使用 Chrome 内置 AI。你也可以填自己的 API Key，用自己的 AI 服务整理字段。</p>
+        </div>
+      </div>
+
+      <div className="config-card">
+        <div className="card-header">
+          <Sparkles size={20} />
+          <h3>整理方式</h3>
+        </div>
+        <div className="save-mode-grid ai-provider-grid">
+          {[
+            {
+              value: 'chromeBuiltIn',
+              title: 'Chrome 内置 AI',
+              desc: '不需要 API Key。浏览器支持时，在本机完成整理。',
+            },
+            {
+              value: 'customApi',
+              title: '使用自己的 API Key',
+              desc: '调用你配置的 AI 服务。Key 只保存在本机。',
+            },
+          ].map((mode) => (
+            <button
+              key={mode.value}
+              type="button"
+              className={`save-mode-card ${normalized.mode === mode.value ? 'active' : ''}`}
+              onClick={() => updateConfig({ mode: mode.value as AiProviderConfig['mode'] })}
+            >
+              <span className="save-mode-title">{mode.title}</span>
+              <span className="save-mode-desc">{mode.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isCustomApi && (
+        <div className="config-card">
+          <div className="card-header">
+            <KeyRound size={20} />
+            <h3>自有 API Key</h3>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">服务商</label>
+            <select
+              className="form-select"
+              value={normalized.provider}
+              onChange={(event) => updateConfig({
+                provider: event.target.value as AiProviderConfig['provider'],
+                model: event.target.value === 'gemini' ? DEFAULT_AI_PROVIDER_CONFIG.model : 'gpt-4o-mini',
+              })}
+            >
+              <option value="gemini">Gemini</option>
+              <option value="openaiCompatible">OpenAI 兼容接口</option>
+            </select>
+            <p className="form-hint">Gemini 会调用 Google AI Studio API；OpenAI 兼容接口适合 OpenAI 或其他兼容服务。</p>
+          </div>
+
+          {normalized.provider === 'openaiCompatible' && (
+            <div className="form-group">
+              <label className="form-label">Base URL</label>
+              <input
+                value={normalized.baseUrl || ''}
+                onChange={(event) => updateConfig({ baseUrl: event.target.value })}
+                className="form-input"
+                placeholder="https://api.openai.com/v1"
+              />
+              <p className="form-hint">填写到 /v1 即可，插件会自动请求 /chat/completions。</p>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label className="form-label">模型名</label>
+            <input
+              value={normalized.model || ''}
+              onChange={(event) => updateConfig({ model: event.target.value })}
+              className="form-input"
+              placeholder={normalized.provider === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini'}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              <Shield size={14} />
+              API Key
+            </label>
+            <div className="input-with-action">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={normalized.apiKey}
+                onChange={(event) => updateConfig({ apiKey: event.target.value })}
+                className="form-input"
+                placeholder="粘贴你的 API Key"
+              />
+              <button
+                onClick={() => setShowKey(!showKey)}
+                className="input-action-btn"
+                title={showKey ? '隐藏' : '显示'}
+                type="button"
+              >
+                {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            <p className="form-hint">保存逻辑与飞书、Notion key 一致：只保存在用户本机的加密配置中。</p>
+          </div>
+
+          {testResult && (
+            <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>
+              {testResult.success ? <CheckCircle size={18} /> : <XCircle size={18} />}
+              <span>{testResult.message}</span>
+            </div>
+          )}
+
+          <div className="form-actions">
+            <button onClick={onTest} disabled={isTesting || !normalized.apiKey} className="btn btn-secondary" type="button">
+              {isTesting ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+              测试连接
+            </button>
+            <button onClick={onSave} disabled={!normalized.apiKey} className="btn btn-primary" type="button">
+              <Save size={16} />
+              保存 API Key
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isCustomApi && (
+        <div className="info-card info">
+          <h3 className="info-title">
+            <Sparkles size={16} />
+            也可以使用自己的 API Key
+          </h3>
+          <p className="info-text">如果当前 Chrome 暂不支持内置 AI，或你希望使用自己的模型服务，可以切换到「使用自己的 API Key」。自有 API 模式下，网页内容会发送给你配置的 AI 服务，插件开发者服务器不参与。</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * 表格配置视图
  */
@@ -250,11 +441,19 @@ function TableConfigView({
   selectedTableId,
   setSelectedTableId,
   onRefresh,
+  clipFields,
+  onClipFieldsChange,
+  autoLoadFieldsOnOpen = false,
+  onAutoLoadFieldsConsumed,
 }: {
   tables: TableConfig[];
   selectedTableId: string | null;
   setSelectedTableId: (id: string | null) => void;
   onRefresh: () => void;
+  clipFields: ClipFieldConfig[];
+  onClipFieldsChange: (fields: ClipFieldConfig[]) => void;
+  autoLoadFieldsOnOpen?: boolean;
+  onAutoLoadFieldsConsumed?: () => void;
 }) {
   const [editingTable, setEditingTable] = useState<Partial<TableConfig>>({
     name: '',
@@ -266,6 +465,9 @@ function TableConfigView({
   const [availableFields, setAvailableFields] = useState<FeishuField[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [shareCode, setShareCode] = useState('');
+  const [pendingSharedTemplate, setPendingSharedTemplate] = useState<SharedKnowledgeTemplate | null>(null);
+  const [templateShareStatus, setTemplateShareStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   const existingTable = selectedTableId ? tables.find((t) => t.id === selectedTableId) : null;
   const isNewTable = !existingTable;
@@ -283,7 +485,53 @@ function TableConfigView({
       });
     }
     setAvailableFields([]);
+    setPendingSharedTemplate(null);
+    setShareCode('');
+    setTemplateShareStatus(null);
   }, [existingTable]);
+
+  const loadFieldsForTable = useCallback(async (table: Pick<Partial<TableConfig>, 'appToken' | 'tableId'>) => {
+    if (!table.appToken || !table.tableId) return;
+    setIsLoading(true);
+    try {
+      const fields = await getTableFields(table.appToken, table.tableId);
+      setAvailableFields(fields);
+      if (pendingSharedTemplate) {
+        const matchedMappings = matchSharedTemplateMappings(pendingSharedTemplate, fields);
+        setEditingTable(current => ({
+          ...current,
+          name: pendingSharedTemplate.name,
+          templateId: pendingSharedTemplate.templateId,
+          fieldMappings: matchedMappings,
+        }));
+        setTemplateShareStatus({
+          success: matchedMappings.length > 0,
+          message: matchedMappings.length > 0
+            ? `共享模板已匹配 ${matchedMappings.length} 个飞书列，请检查后保存。`
+            : '已经读取列名，但没有找到同名列。请按模板列名调整飞书表格后重试。',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load fields:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [pendingSharedTemplate]);
+
+  useEffect(() => {
+    if (!autoLoadFieldsOnOpen || !existingTable?.appToken || !existingTable?.tableId) return;
+
+    void loadFieldsForTable(existingTable).finally(() => {
+      onAutoLoadFieldsConsumed?.();
+    });
+  }, [
+    autoLoadFieldsOnOpen,
+    existingTable?.appToken,
+    existingTable?.id,
+    existingTable?.tableId,
+    loadFieldsForTable,
+    onAutoLoadFieldsConsumed,
+  ]);
 
   /**
    * 从飞书多维表格链接中解析 appToken 和 tableId
@@ -309,16 +557,7 @@ function TableConfigView({
   };
 
   const loadFields = async () => {
-    if (!editingTable.appToken || !editingTable.tableId) return;
-    setIsLoading(true);
-    try {
-      const fields = await getTableFields(editingTable.appToken, editingTable.tableId);
-      setAvailableFields(fields);
-    } catch (error) {
-      console.error('Failed to load fields:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    await loadFieldsForTable(editingTable);
   };
 
   const handleSave = async () => {
@@ -355,9 +594,18 @@ function TableConfigView({
     setSelectedTableId(null);
   };
 
-  const updateMapping = (fieldId: string, sourceType: TableFieldMapping['sourceType'], staticValue?: string) => {
+  const availableClipFields = normalizeClipFields(clipFields);
+
+  const updateMapping = (
+    fieldId: string,
+    sourceType: TableFieldMapping['sourceType'],
+    staticValue?: string,
+    aiFieldId?: string,
+    aiFieldName?: string
+  ) => {
     const field = availableFields.find((f) => f.id === fieldId);
     if (!field) return;
+    const selectedAiField = availableClipFields.find(item => item.id === aiFieldId) || availableClipFields[0];
 
     const existingMappings = editingTable.fieldMappings || [];
     const index = existingMappings.findIndex((m) => m.feishuFieldId === fieldId);
@@ -367,6 +615,8 @@ function TableConfigView({
       feishuFieldName: field.name,
       sourceType,
       staticValue,
+      aiFieldId: sourceType === 'aiField' ? selectedAiField?.id : aiFieldId,
+      aiFieldName: sourceType === 'aiField' ? (selectedAiField?.label || aiFieldName || field.name) : aiFieldName,
     };
 
     let newMappings: TableFieldMapping[];
@@ -418,6 +668,47 @@ function TableConfigView({
     });
   };
 
+  const copySharedTemplate = async () => {
+    const template = createSharedKnowledgeTemplate(editingTable, availableClipFields);
+    const code = encodeSharedKnowledgeTemplate(template);
+    setShareCode(code);
+    try {
+      await navigator.clipboard.writeText(code);
+      setTemplateShareStatus({ success: true, message: '共享模板代码已复制，可以发给同事。' });
+    } catch {
+      setTemplateShareStatus({ success: false, message: '无法自动复制，请手动复制下方模板代码。' });
+    }
+  };
+
+  const importSharedTemplate = async () => {
+    try {
+      const template = parseSharedKnowledgeTemplate(shareCode);
+      const importedClipFields = normalizeClipFields(template.clipFields);
+      await saveClipFields(importedClipFields);
+      onClipFieldsChange(importedClipFields);
+      setPendingSharedTemplate(template);
+
+      const matchedMappings = matchSharedTemplateMappings(template, availableFields);
+      setEditingTable(current => ({
+        ...current,
+        name: template.name,
+        templateId: template.templateId,
+        fieldMappings: matchedMappings,
+      }));
+      setTemplateShareStatus({
+        success: true,
+        message: availableFields.length > 0
+          ? `模板已导入并匹配 ${matchedMappings.length} 个飞书列，请检查后保存。`
+          : '模板已导入。请粘贴你自己的飞书表格链接并读取列名，插件会按列名匹配。',
+      });
+    } catch (error) {
+      setTemplateShareStatus({
+        success: false,
+        message: error instanceof Error ? error.message : '导入共享模板失败。',
+      });
+    }
+  };
+
   const sourceTypeOptions = [
     { value: '', label: '-- 这一列先不保存 --' },
     { value: 'url', label: '🔗 页面网址', desc: '网页链接地址' },
@@ -430,6 +721,8 @@ function TableConfigView({
     { value: 'status', label: '📥 整理状态', desc: '未处理、待读、精读等状态' },
     { value: 'contentType', label: '🗂️ 资料类型', desc: '阅读资料、行业研究、内容素材等类型' },
     { value: 'excerpt', label: '✂️ 摘录', desc: '选中文本或摘要' },
+    { value: 'aiField', label: '✨ AI 写入字段', desc: '保存前由 AI 信息整理后写入这一列' },
+    { value: 'customFields', label: '🧩 全部自定义字段汇总', desc: '把侧栏自定义字段合并写入这一列' },
     { value: 'note', label: '💬 个人备注', desc: '剪藏时填写的备注' },
     { value: 'reviewAt', label: '📅 下次回顾', desc: '剪藏时选择的回顾日期' },
     { value: 'saveTime', label: '⏱️ 保存时间', desc: '剪藏时间' },
@@ -583,6 +876,14 @@ function TableConfigView({
           )}
         </div>
 
+        <TemplateSharingPanel
+          code={shareCode}
+          status={templateShareStatus}
+          onCodeChange={setShareCode}
+          onCopy={copySharedTemplate}
+          onImport={importSharedTemplate}
+        />
+
         {availableFields.length > 0 && (
           <div className="field-mapping-section">
             <h3 className="section-title">
@@ -590,7 +891,7 @@ function TableConfigView({
               保存内容对应到哪一列
               <FieldHelp fieldKey="fieldMapping" />
             </h3>
-            <p className="section-desc">告诉插件：网页里的标题、链接、备注等内容，分别放进表格的哪一列。</p>
+            <p className="section-desc">告诉插件：网页里的标题、链接、备注等内容，分别放进表格的哪一列。想让 AI 先整理再写入某列，可把该列设为「AI 写入字段」，保存前会在侧栏展示这些字段。</p>
 
             <div className="field-mapping-list">
               {availableFields.map((field) => {
@@ -610,7 +911,9 @@ function TableConfigView({
                           updateMapping(
                             field.id,
                             e.target.value as any,
-                            mapping?.staticValue
+                            mapping?.staticValue,
+                            mapping?.aiFieldId,
+                            mapping?.aiFieldName
                           )
                         }
                         className="form-select"
@@ -631,6 +934,24 @@ function TableConfigView({
                           className="form-input static-value"
                           placeholder="固定写入这列，例如：待阅读、行业研究、来自插件"
                         />
+                      )}
+                      {mapping?.sourceType === 'aiField' && (
+                        <select
+                          value={mapping?.aiFieldId || availableClipFields[0]?.id || ''}
+                          onChange={(e) =>
+                            updateMapping(field.id, 'aiField', mapping?.staticValue, e.target.value)
+                          }
+                          className="form-select static-value"
+                        >
+                          {availableClipFields.map(clipField => (
+                            <option key={clipField.id} value={clipField.id}>
+                              {clipField.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {mapping?.sourceType === 'aiField' && (
+                        <span className="form-hint">侧栏会显示「{availableClipFields.find(item => item.id === mapping.aiFieldId)?.label || mapping.aiFieldName || availableClipFields[0]?.label || field.name}」，AI 写入结果会保存到「{field.name}」。</span>
                       )}
                     </div>
                   </div>
@@ -1308,17 +1629,23 @@ function ImportExportView() {
  * 主应用组件
  */
 export default function OptionsApp() {
-  const getInitialView = (): ViewType => {
-    const hash = window.location.hash.replace('#', '');
-    return hash === 'interop' ? 'interop' : 'feishu';
-  };
-  const [activeView, setActiveView] = useState<ViewType>(getInitialView);
+  const [initialRoute] = useState(() => parseOptionsHash(window.location.hash));
+  const [activeView, setActiveView] = useState<ViewType>(initialRoute.view);
   const [feishuCreds, setFeishuCreds] = useState<FeishuCredentials>({ appId: '', appSecret: '' });
   const [saveMode, setSaveModeState] = useState<SaveMode>('feishu');
   const [tables, setTables] = useState<TableConfig[]>([]);
-  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [clipFields, setClipFields] = useState<ClipFieldConfig[]>([]);
+  const [aiProvider, setAiProvider] = useState<AiProviderConfig>({ ...DEFAULT_AI_PROVIDER_CONFIG });
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(
+    initialRoute.view === 'tables' ? initialRoute.tableId : null
+  );
+  const [autoLoadFieldsTableId, setAutoLoadFieldsTableId] = useState<string | null>(
+    initialRoute.autoLoadFields ? initialRoute.tableId : null
+  );
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isTestingAi, setIsTestingAi] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -1328,6 +1655,8 @@ export default function OptionsApp() {
     setSaveModeState(mode);
     const tableConfigs = await getTableConfigs();
     setTables(tableConfigs);
+    setClipFields(await getClipFields());
+    setAiProvider(await getAiProviderConfig());
   }, []);
 
   const handleSetSaveMode = async (mode: SaveMode) => {
@@ -1335,16 +1664,31 @@ export default function OptionsApp() {
     await saveSaveMode(mode);
   };
 
+  const openFeedback = () => {
+    window.open(
+      buildFeedbackIssueUrl({
+        extensionVersion: chrome.runtime.getManifest().version,
+        userAgent: navigator.userAgent,
+      }),
+      '_blank',
+      'noopener,noreferrer'
+    );
+  };
+
   useEffect(() => {
     loadData();
   }, [loadData]);
 
   useEffect(() => {
-    const nextHash = activeView === 'interop' ? '#interop' : '';
+    const nextHash = buildOptionsHash({
+      view: activeView,
+      tableId: activeView === 'tables' ? selectedTableId : null,
+      autoLoadFields: false,
+    });
     if (window.location.hash !== nextHash) {
       history.replaceState(null, '', `${window.location.pathname}${nextHash}`);
     }
-  }, [activeView]);
+  }, [activeView, selectedTableId]);
 
   const handleSaveFeishu = async () => {
     await saveFeishuCredentials(feishuCreds);
@@ -1368,6 +1712,23 @@ export default function OptionsApp() {
       });
     } finally {
       setIsTesting(false);
+    }
+  };
+
+  const handleSaveAiProvider = async () => {
+    await saveAiProviderConfig(aiProvider);
+    setAiTestResult({ success: true, message: 'AI 功能设置已保存。' });
+    setTimeout(() => setAiTestResult(null), 3000);
+  };
+
+  const handleTestAiProvider = async () => {
+    setIsTestingAi(true);
+    setAiTestResult(null);
+    try {
+      const result = await testAiProviderConnection(aiProvider);
+      setAiTestResult(result);
+    } finally {
+      setIsTestingAi(false);
     }
   };
 
@@ -1445,6 +1806,12 @@ export default function OptionsApp() {
               onClick={() => setActiveView('interop')}
             />
             <SidebarItem
+              icon={Bot}
+              label="AI 功能设置"
+              isActive={activeView === 'ai'}
+              onClick={() => setActiveView('ai')}
+            />
+            <SidebarItem
               icon={FileJson}
               label="备份与恢复"
               isActive={activeView === 'importExport'}
@@ -1454,15 +1821,25 @@ export default function OptionsApp() {
         </nav>
 
         <div className="sidebar-footer">
-          <button
-            onClick={() => setIsHelpOpen(true)}
-            className="sidebar-help-btn"
-            title="查看帮助文档"
-          >
-            <HelpCircle size={16} />
-            <span>使用帮助</span>
-          </button>
-          <p>Save to Feishu v0.5.0</p>
+          <div className="sidebar-support-actions">
+            <button
+              onClick={() => setIsHelpOpen(true)}
+              className="sidebar-help-btn"
+              title="查看帮助文档"
+            >
+              <HelpCircle size={16} />
+              <span>使用帮助</span>
+            </button>
+            <button
+              onClick={openFeedback}
+              className="sidebar-feedback-btn"
+              title="提交问题反馈"
+            >
+              <MessageSquareWarning size={16} />
+              <span>问题反馈</span>
+            </button>
+          </div>
+          <p>Save to Feishu v0.5.5</p>
         </div>
       </aside>
 
@@ -1487,10 +1864,25 @@ export default function OptionsApp() {
             selectedTableId={selectedTableId}
             setSelectedTableId={setSelectedTableId}
             onRefresh={loadData}
+            clipFields={clipFields}
+            onClipFieldsChange={setClipFields}
+            autoLoadFieldsOnOpen={Boolean(autoLoadFieldsTableId && autoLoadFieldsTableId === selectedTableId)}
+            onAutoLoadFieldsConsumed={() => setAutoLoadFieldsTableId(null)}
           />
         )}
 
         {activeView === 'interop' && <NotionInteropView tables={tables} />}
+
+        {activeView === 'ai' && (
+          <AiConfigView
+            config={aiProvider}
+            setConfig={setAiProvider}
+            onSave={handleSaveAiProvider}
+            onTest={handleTestAiProvider}
+            isTesting={isTestingAi}
+            testResult={aiTestResult}
+          />
+        )}
 
         {activeView === 'importExport' && <ImportExportView />}
       </main>

@@ -1,6 +1,8 @@
-import type { ExtractedPageContent, HtmlElementInfo } from '@/types';
-import { getSaveMode, getTableConfigs, saveTableConfigs } from '@/services/storageService';
+import type { ExtractedPageContent, HtmlElementInfo, KnowledgeMetadata } from '@/types';
+import { getExtensionUpdateNotice, getSaveMode, getTableConfigs, rememberSavedContent, saveExtensionUpdateNotice, saveTableConfigs } from '@/services/storageService';
 import { saveToFeishu as feishuSaveToFeishu } from '@/services/feishuService';
+import { buildFeishuSavedContentTarget, buildMarkdownSavedContentTarget, createSavedContentRecord } from '@/utils/savedContent';
+import { createExtensionUpdateNotice, shouldClearUpdateBadgeOnLaunch } from '@/utils/updateNotice';
 
 // 右键菜单 ID
 const CONTEXT_MENU_ID = 'save-to-feishu-menu';
@@ -26,6 +28,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .then(saveMode => sendResponse({ saveMode }))
       .catch(() => sendResponse({ saveMode: 'feishu' }));
     return true;
+  } else if (message.action === 'recordMarkdownSave') {
+    if (message.content) {
+      rememberSavedContent(createSavedContentRecord({
+        content: message.content,
+        target: buildMarkdownSavedContentTarget(),
+        metadata: message.metadata,
+      }))
+        .then(() => sendResponse({ success: true }))
+        .catch(error => sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : '记录保存次数失败',
+        }));
+      return true;
+    }
+    sendResponse({ success: false, error: '缺少网页内容' });
   } else if (message.action === 'openInteropOptions') {
     chrome.tabs.create({ url: chrome.runtime.getURL('options/index.html#interop') });
     sendResponse({ success: true });
@@ -56,7 +73,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   } else if (message.action === 'saveToFeishu') {
     feishuSaveToFeishu(message.table, message.content, message.htmlElements, message.metadata)
-      .then(result => {
+      .then(async result => {
+        if (result.success && message.table && message.content) {
+          await rememberSavedContent(createSavedContentRecord({
+            content: message.content,
+            target: buildFeishuSavedContentTarget(message.table),
+            result,
+            metadata: message.metadata,
+          }));
+        }
         sendResponse(result);
       })
       .catch(error => {
@@ -75,6 +100,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
  * 点击插件图标时打开侧边栏
  */
 chrome.action.onClicked.addListener(async (tab) => {
+  await clearUpdateBadgeOnLaunch();
   if (tab.id) {
     try {
       await chrome.sidePanel.open({ tabId: tab.id });
@@ -87,34 +113,73 @@ chrome.action.onClicked.addListener(async (tab) => {
 /**
  * 插件安装时
  */
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   console.log('Save to Feishu extension installed');
   chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch(error => {
     console.warn('设置点击图标打开侧边栏失败:', error);
   });
-  createContextMenu();
+  handleInstalled(details);
+  createContextMenus();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  createContextMenus();
 });
 
 /**
  * 创建右键菜单
  */
-function createContextMenu() {
-  // 创建顶级菜单
-  chrome.contextMenus.create({
-    id: CONTEXT_MENU_ID,
-    title: '保存到飞书',
-    contexts: ['page', 'link', 'image'],
-  });
+function createContextMenus() {
+  chrome.contextMenus.removeAll(() => {
+    if (chrome.runtime.lastError) {
+      console.warn('清理右键菜单失败:', chrome.runtime.lastError.message);
+    }
 
-  // 创建子菜单：直接保存到第一个表格
-  chrome.contextMenus.create({
-    id: CONTEXT_MENU_DIRECT,
-    parentId: CONTEXT_MENU_ID,
-    title: '直接保存到第一个表格',
-    contexts: ['page'],
-  });
+    // 创建顶级菜单
+    chrome.contextMenus.create({
+      id: CONTEXT_MENU_ID,
+      title: '保存到飞书',
+      contexts: ['page', 'link', 'image'],
+    });
 
-  console.log('右键菜单已创建');
+    // 创建子菜单：直接保存到第一个表格
+    chrome.contextMenus.create({
+      id: CONTEXT_MENU_DIRECT,
+      parentId: CONTEXT_MENU_ID,
+      title: '直接保存到第一个表格',
+      contexts: ['page'],
+    });
+
+    console.log('右键菜单已创建');
+  });
+}
+
+async function handleInstalled(details: chrome.runtime.InstalledDetails): Promise<void> {
+  const notice = createExtensionUpdateNotice({
+    reason: details.reason,
+    previousVersion: details.previousVersion,
+    version: chrome.runtime.getManifest().version,
+  });
+  if (!notice) return;
+
+  try {
+    await saveExtensionUpdateNotice(notice);
+    await chrome.action.setBadgeBackgroundColor({ color: '#1456d9' });
+    await chrome.action.setBadgeText({ text: 'NEW' });
+  } catch (error) {
+    console.warn('保存更新提醒失败:', error);
+  }
+}
+
+async function clearUpdateBadgeOnLaunch(): Promise<void> {
+  try {
+    const notice = await getExtensionUpdateNotice();
+    if (shouldClearUpdateBadgeOnLaunch(notice)) {
+      await chrome.action.setBadgeText({ text: '' });
+    }
+  } catch (error) {
+    console.warn('清除更新标记失败:', error);
+  }
 }
 
 /**
@@ -125,6 +190,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   if (info.menuItemId === CONTEXT_MENU_ID) {
     try {
+      await clearUpdateBadgeOnLaunch();
       await chrome.sidePanel.open({ tabId: tab.id });
     } catch (error) {
       console.error('无法打开侧边栏:', error);
@@ -233,7 +299,7 @@ async function handleDirectSave(tabId: number) {
     const htmlElements = htmlResults?.[0]?.result || [];
 
     // 4. 使用第一个表格保存
-    const result = await feishuSaveToFeishu(tables[0], content, htmlElements, {
+    const metadata: KnowledgeMetadata = {
       tags: [],
       source: (() => {
         try {
@@ -247,7 +313,17 @@ async function handleDirectSave(tabId: number) {
       excerpt: content.description || '',
       note: '',
       reviewAt: '',
-    });
+    };
+    const result = await feishuSaveToFeishu(tables[0], content, htmlElements, metadata);
+
+    if (result.success) {
+      await rememberSavedContent(createSavedContentRecord({
+        content,
+        target: buildFeishuSavedContentTarget(tables[0]),
+        result,
+        metadata,
+      }));
+    }
 
     await showActionBadge(result.success ? '✓' : '!', result.success ? '#1f8f4d' : '#d92d20');
   } catch (error) {
