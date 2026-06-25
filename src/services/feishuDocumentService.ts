@@ -613,6 +613,14 @@ export async function createDocumentWithElements(
             elements: createTextElements(el.content || '', el.linkUrl),
           },
         });
+      } else if (el.type === 'media') {
+        const label = el.content || ({ video: '视频', audio: '音频', embed: '嵌入内容', 'mini-program': '小程序' }[el.mediaType || 'embed']);
+        blocks.push({
+          block_type: BlockType.TEXT,
+          text: {
+            elements: createTextElements(`[${label}]`, el.linkUrl),
+          },
+        });
       }
     }
 

@@ -24,9 +24,10 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { ClipFieldConfig, ExtensionUpdateNotice, ExtractedPageContent, HtmlElementInfo, KnowledgeMetadata, ProductEngagement, SaveMode, SavedContentRecord, SaveResult, TableConfig } from '@/types';
+import type { ContentKind, ExcerptType } from '@/types';
 import { checkAiClipAvailability, generateAiClipSuggestion, type AiClipStatus } from '@/services/aiService';
 import { saveToFeishu } from '@/services/feishuService';
-import { completeRatingInvitation, dismissCurrentUpdateNotice, dismissRatingInvitation, getClipFields, getExtensionUpdateNotice, getProductEngagement, getSaveMode, getSavedContentRecords, getTableConfigs, rememberSavedContent, saveClipFields, saveTableConfig, saveTableConfigs } from '@/services/storageService';
+import { completeRatingInvitation, dismissCurrentUpdateNotice, dismissRatingInvitation, getClipFields, getExtensionUpdateNotice, getProductEngagement, getSaveMode, getSavedContentRecords, getTableConfigs, rememberSavedContent, saveClipFields, saveTableConfig, saveTableConfigs, setSavedContentReviewAt } from '@/services/storageService';
 import { getAiFieldId, getEffectiveClipFieldType, MAX_CLIP_FIELDS, normalizeClipFields } from '@/utils/clipFields';
 import { downloadMarkdown, generateMarkdown, generateMarkdownFilename } from '@/utils/markdownGenerator';
 import { buildFeishuSavedContentTarget, buildMarkdownSavedContentTarget, createSavedContentRecord, findSavedContentRecord, upsertSavedContentRecord } from '@/utils/savedContent';
@@ -39,17 +40,21 @@ import {
   getSourceHostname,
   parseKnowledgeTags,
 } from '@/utils/knowledgeMetadata';
+import { extractCurrentPageSnapshot } from '@/utils/pageExtraction';
 import {
   ExtensionUpdateCard,
   PanelStateMessage,
   RatingInvitationCard,
+  ReviewScheduleField,
   SavedContentLibrary,
 } from '@/sidepanel/components/GrowthPanels';
+import { MarkdownFirstSaveCard } from '@/components/MarkdownFirstSaveCard';
 
 type PanelState = 'loading' | 'ready' | 'error';
 type AiUiStatus = AiClipStatus | 'idle' | 'loading';
 type PanelStep = 'target' | 'editor';
 type PanelView = 'capture' | 'library';
+type CaptureMode = ContentKind;
 
 interface ActivePageData {
   content: ExtractedPageContent;
@@ -77,6 +82,8 @@ function buildPagePreview(content: ExtractedPageContent, elements: HtmlElementIn
 
   return truncatePreview(structuredPreview || content.content || content.description || '', 520);
 }
+
+const EXCERPT_TYPES: ExcerptType[] = ['观点', '案例', '数据', '金句', '问题', '其他'];
 
 function getTableUrl(table: TableConfig | undefined): string {
   if (!table) return '';
@@ -107,6 +114,16 @@ async function extractActivePage(): Promise<ActivePageData> {
   if (!tabId) throw new Error('无法获取当前标签页');
 
   const [contentResult] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: extractCurrentPageSnapshot,
+  });
+
+  const sharedSnapshot = contentResult.result;
+  if (sharedSnapshot && typeof sharedSnapshot === 'object' && 'content' in sharedSnapshot && 'htmlElements' in sharedSnapshot) {
+    return sharedSnapshot as ActivePageData;
+  }
+
+  const [fallbackContentResult] = await chrome.scripting.executeScript({
     target: { tabId },
     func: () => {
       const getMeta = (name: string, property?: string) => {
@@ -229,9 +246,9 @@ async function extractActivePage(): Promise<ActivePageData> {
     },
   });
 
-  if (!contentResult.result) throw new Error('无法读取当前页面内容');
+  if (!fallbackContentResult.result) throw new Error('无法读取当前页面内容');
   return {
-    content: contentResult.result as ExtractedPageContent,
+    content: fallbackContentResult.result as ExtractedPageContent,
     htmlElements: (elementsResult.result || []) as HtmlElementInfo[],
   };
 }
@@ -240,11 +257,13 @@ export default function SidePanelApp() {
   const [panelState, setPanelState] = useState<PanelState>('loading');
   const [error, setError] = useState('');
   const [content, setContent] = useState<ExtractedPageContent | null>(null);
+  const [activePageData, setActivePageData] = useState<ActivePageData | null>(null);
   const [htmlElements, setHtmlElements] = useState<HtmlElementInfo[]>([]);
   const [metadata, setMetadata] = useState<KnowledgeMetadata | null>(null);
+  const [captureMode, setCaptureMode] = useState<CaptureMode>('page');
   const [tables, setTables] = useState<TableConfig[]>([]);
   const [selectedTableId, setSelectedTableId] = useState('');
-  const [saveMode, setSaveMode] = useState<SaveMode>('feishu');
+  const [saveMode, setSaveMode] = useState<SaveMode>('markdown');
   const [savedContentRecords, setSavedContentRecords] = useState<SavedContentRecord[]>([]);
   const [updateNotice, setUpdateNotice] = useState<ExtensionUpdateNotice | null>(null);
   const [productEngagement, setProductEngagement] = useState<ProductEngagement>({ ...DEFAULT_PRODUCT_ENGAGEMENT });
@@ -269,17 +288,17 @@ export default function SidePanelApp() {
   const visibleTables = showAllTables ? tables : tables.slice(0, 5);
   const getSavedRecordForTable = useCallback((table: TableConfig): SavedContentRecord | undefined => {
     return content
-      ? findSavedContentRecord(savedContentRecords, content.url, buildFeishuSavedContentTarget(table))
+      ? findSavedContentRecord(savedContentRecords, content.url, buildFeishuSavedContentTarget(table), captureMode)
       : undefined;
-  }, [content, savedContentRecords]);
+  }, [captureMode, content, savedContentRecords]);
 
   const currentSavedRecord = useMemo(() => {
     if (!content) return undefined;
     if (saveMode === 'markdown') {
-      return findSavedContentRecord(savedContentRecords, content.url, buildMarkdownSavedContentTarget());
+      return findSavedContentRecord(savedContentRecords, content.url, buildMarkdownSavedContentTarget(), captureMode);
     }
     return selectedTable ? getSavedRecordForTable(selectedTable) : undefined;
-  }, [content, getSavedRecordForTable, saveMode, savedContentRecords, selectedTable]);
+  }, [captureMode, content, getSavedRecordForTable, saveMode, savedContentRecords, selectedTable]);
 
   const getFieldsForTable = useCallback((table?: TableConfig): ClipFieldConfig[] => {
     const usedIds = new Set<string>();
@@ -323,7 +342,9 @@ export default function SidePanelApp() {
         ...current,
         tags: hasTagsField ? (ai.suggestion?.tags || current.tags) : current.tags,
         contentType: hasContentTypeField ? (ai.suggestion?.contentType || current.contentType) : current.contentType,
-        excerpt: current.excerpt || (hasSummaryField ? ai.suggestion?.summary : '') || '',
+        excerpt: pageContent.contentKind === 'excerpt'
+          ? current.excerpt
+          : current.excerpt || (hasSummaryField ? ai.suggestion?.summary : '') || '',
         customFields: fields.reduce<Record<string, string>>((acc, field) => {
           if (getEffectiveClipFieldType(field) === 'text') {
             acc[field.id] = ai.suggestion?.fields[field.id] || current.customFields?.[field.id] || '';
@@ -363,6 +384,8 @@ export default function SidePanelApp() {
       setClipFields(fields);
       setDraftClipFields(fields);
       setSelectedTableId(current => current || configs[0]?.id || '');
+      setActivePageData(page);
+      setCaptureMode('page');
       setContent(page.content);
       setHtmlElements(page.htmlElements);
       setMetadata(createDefaultKnowledgeMetadata(page.content, {
@@ -412,6 +435,38 @@ export default function SidePanelApp() {
 
   const updateMetadata = (patch: Partial<KnowledgeMetadata>) => {
     setMetadata(current => current ? { ...current, ...patch } : current);
+  };
+
+  const updateExcerptType = (excerptType: ExcerptType) => {
+    updateMetadata({ excerptType });
+    setContent(current => current ? { ...current, excerptType } : current);
+  };
+
+  const updateExcerptText = (excerpt: string) => {
+    updateMetadata({ excerpt });
+    setContent(current => current ? {
+      ...current,
+      content: excerpt,
+      selectedText: excerpt,
+      description: excerpt.length > 160 ? `${excerpt.slice(0, 160).trim()}...` : excerpt,
+    } : current);
+    setHtmlElements(excerpt.trim() ? [{ type: 'quote', content: excerpt.trim() }] : []);
+  };
+
+  const activatePageData = (page: ActivePageData, mode: CaptureMode, table?: TableConfig) => {
+    setCaptureMode(mode);
+    setContent(page.content);
+    setHtmlElements(page.htmlElements);
+    setMetadata(createDefaultKnowledgeMetadata(page.content, {
+      contentType: mode === 'excerpt' ? '内容素材' : '阅读资料',
+      customFields: {},
+      excerptType: page.content.excerptType,
+    }));
+    const fields = getFieldsForTable(table);
+    setClipFields(fields);
+    setDraftClipFields(fields);
+    setSaveResult(null);
+    setPanelStep('editor');
   };
 
   const getFieldValue = (field: ClipFieldConfig): string => {
@@ -506,6 +561,10 @@ export default function SidePanelApp() {
 
   const handleSave = async () => {
     if (!content || !metadata || (saveMode !== 'markdown' && !selectedTable)) return;
+    if (captureMode === 'excerpt' && !metadata.excerpt?.trim()) {
+      setSaveResult({ success: false, error: '摘录正文为空，请先在网页中选中内容，或手动填写摘录正文。' });
+      return;
+    }
     setIsSaving(true);
     setSaveResult(null);
     try {
@@ -545,15 +604,31 @@ export default function SidePanelApp() {
 
   const handleMarkdown = async () => {
     if (!content || !metadata) return;
-    downloadMarkdown(generateMarkdown(content, htmlElements, { metadata, clipFields }), generateMarkdownFilename(content.title));
-    const record = createSavedContentRecord({
-      content,
-      target: buildMarkdownSavedContentTarget(),
-      metadata,
-    });
-    setSavedContentRecords(current => upsertSavedContentRecord(current, record));
-    await rememberSavedContent(record);
-    setProductEngagement(await getProductEngagement());
+    if (captureMode === 'excerpt' && !metadata.excerpt?.trim()) {
+      setSaveResult({ success: false, error: '摘录正文为空，请先在网页中选中内容，或手动填写摘录正文。' });
+      return;
+    }
+    setIsSaving(true);
+    setSaveResult(null);
+    try {
+      downloadMarkdown(generateMarkdown(content, htmlElements, { metadata, clipFields }), generateMarkdownFilename(content.title));
+      const record = createSavedContentRecord({
+        content,
+        target: buildMarkdownSavedContentTarget(),
+        metadata,
+      });
+      setSavedContentRecords(current => upsertSavedContentRecord(current, record));
+      await rememberSavedContent(record);
+      setProductEngagement(await getProductEngagement());
+      setSaveResult({ success: true });
+    } catch (err) {
+      setSaveResult({
+        success: false,
+        error: err instanceof Error ? err.message : 'Markdown 保存失败',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAiRetry = async () => {
@@ -570,12 +645,9 @@ export default function SidePanelApp() {
     const table = tables.find(item => item.id === tableId);
     setSelectedTableId(tableId);
     setSaveResult(null);
-    if (table) {
-      const fields = getFieldsForTable(table);
-      setClipFields(fields);
-      setDraftClipFields(fields);
+    if (table && activePageData) {
+      activatePageData(activePageData, 'page', table);
     }
-    setPanelStep('editor');
   };
 
   const handleMoveTable = async (tableId: string, direction: -1 | 1) => {
@@ -611,6 +683,13 @@ export default function SidePanelApp() {
     if (targetUrl) chrome.tabs.create({ url: targetUrl });
   };
 
+  const handleSavedRecordReviewAtChange = async (
+    record: SavedContentRecord,
+    reviewAt?: string
+  ) => {
+    setSavedContentRecords(await setSavedContentReviewAt(record.key, reviewAt));
+  };
+
   const handleDismissUpdateNotice = async () => {
     setUpdateNotice(null);
     await dismissCurrentUpdateNotice();
@@ -630,6 +709,15 @@ export default function SidePanelApp() {
 
   const goBackToTarget = () => {
     setSaveResult(null);
+    if (activePageData) {
+      setContent(activePageData.content);
+      setHtmlElements(activePageData.htmlElements);
+      setMetadata(createDefaultKnowledgeMetadata(activePageData.content, {
+        contentType: '阅读资料',
+        customFields: {},
+      }));
+      setCaptureMode('page');
+    }
     setPanelStep('target');
   };
 
@@ -661,7 +749,7 @@ export default function SidePanelApp() {
               {panelView === 'library'
                 ? '最近保存与待回顾'
                 : panelStep === 'target'
-                  ? '选择保存位置'
+                  ? (tables.length === 0 ? '先保存到电脑' : '选择保存位置')
                   : '整理后保存'}
             </p>
           </div>
@@ -708,6 +796,7 @@ export default function SidePanelApp() {
           onBack={() => setPanelView('capture')}
           onOpenOriginal={record => chrome.tabs.create({ url: record.url })}
           onOpenTarget={openSavedRecordTarget}
+          onReviewAtChange={handleSavedRecordReviewAtChange}
           formatSavedAt={formatSavedAt}
         />
       )}
@@ -715,10 +804,16 @@ export default function SidePanelApp() {
       {panelState === 'ready' && panelView === 'capture' && content && metadata && panelStep === 'target' && (
         <main className="sp-main">
           <section className="sp-section sp-target-section">
-            <div className="sp-step-label">1 / 2</div>
+            <div className="sp-step-label">{tables.length === 0 ? '立即开始' : '1 / 2'}</div>
             <div className="sp-section-title">
-              <Database size={16} />
-              <span>选择飞书资料库</span>
+              {tables.length === 0 ? <Download size={16} /> : <Database size={16} />}
+              <span>{tables.length === 0 ? '本地 Markdown 剪藏' : '选择飞书资料库'}</span>
+            </div>
+            <div className="sp-excerpt-entry">
+              <div className="sp-excerpt-copy">
+                <strong>保存某段摘录</strong>
+                <span>在网页中选中文字后，直接右键选择“保存选中内容为摘录”，不用切回侧栏。</span>
+              </div>
             </div>
             {tables.length > 0 ? (
               <div className="sp-table-list" aria-label="飞书资料库">
@@ -786,17 +881,23 @@ export default function SidePanelApp() {
                 )}
               </div>
             ) : (
-              <div className="sp-notice">
-                还没有连接飞书资料库。可以先下载 Markdown，或进入设置添加资料库。
-              </div>
+              <MarkdownFirstSaveCard
+                surface="sidepanel"
+                isSaving={isSaving}
+                result={saveResult}
+                onSave={handleMarkdown}
+                onSaveToFeishu={() => openOptions()}
+              />
             )}
 
-            <div className="sp-actions sp-actions-single">
-              <button className="sp-markdown-btn" onClick={handleMarkdown} type="button">
-                <Download size={16} />
-                <span>仅保存 Markdown</span>
-              </button>
-            </div>
+            {tables.length > 0 && (
+              <div className="sp-actions sp-actions-single">
+                <button className="sp-markdown-btn" onClick={handleMarkdown} disabled={isSaving} type="button">
+                  <Download size={16} />
+                  <span>仅保存 Markdown</span>
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="sp-section sp-context-section sp-page">
@@ -843,6 +944,7 @@ export default function SidePanelApp() {
             <h2>{content.title || '未命名网页'}</h2>
             <div className="sp-meta-row">
               <span>{getSourceHostname(content.url)}</span>
+              {captureMode === 'excerpt' && <span>{metadata.excerptType || content.excerptType || '摘录'}</span>}
               {selectedTable && <span>保存到：{selectedTable.name}</span>}
               {content.selectedText && <span>选中文本</span>}
             </div>
@@ -936,6 +1038,17 @@ export default function SidePanelApp() {
                 ))}
               </div>
             )}
+            {captureMode === 'excerpt' && (
+              <label className="sp-field">
+                <span>摘录正文</span>
+                <textarea
+                  value={metadata.excerpt || content.selectedText || ''}
+                  onChange={event => updateExcerptText(event.target.value)}
+                  placeholder="保留真正值得回看、引用或写作复用的片段。"
+                  rows={5}
+                />
+              </label>
+            )}
             {visibleClipFields.map(field => (
               <label className="sp-field" key={field.id}>
                 <span>{field.label}</span>
@@ -963,6 +1076,23 @@ export default function SidePanelApp() {
                 )}
               </label>
             ))}
+            {captureMode === 'excerpt' && (
+              <label className="sp-field">
+                <span>摘录类型</span>
+                <select
+                  value={metadata.excerptType || content.excerptType || '观点'}
+                  onChange={event => updateExcerptType(event.target.value as ExcerptType)}
+                >
+                  {EXCERPT_TYPES.map(type => (
+                    <option key={type}>{type}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <ReviewScheduleField
+              value={metadata.reviewAt || ''}
+              onChange={reviewAt => updateMetadata({ reviewAt })}
+            />
             <details className="sp-advanced">
               <summary>更多整理信息</summary>
               <label className="sp-field">
@@ -981,14 +1111,6 @@ export default function SidePanelApp() {
                   onChange={event => updateMetadata({ note: event.target.value })}
                   placeholder="写给自己的补充说明，可留空。"
                   rows={3}
-                />
-              </label>
-              <label className="sp-field">
-                <span>下次回顾</span>
-                <input
-                  type="date"
-                  value={metadata.reviewAt || ''}
-                  onChange={event => updateMetadata({ reviewAt: event.target.value })}
                 />
               </label>
             </details>

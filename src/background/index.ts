@@ -1,12 +1,17 @@
 import type { ExtractedPageContent, HtmlElementInfo, KnowledgeMetadata } from '@/types';
-import { getExtensionUpdateNotice, getSaveMode, getTableConfigs, rememberSavedContent, saveExtensionUpdateNotice, saveTableConfigs } from '@/services/storageService';
+import { getClipFields, getExtensionUpdateNotice, getSaveMode, getTableConfigs, rememberSavedContent, saveExtensionUpdateNotice, saveTableConfigs } from '@/services/storageService';
 import { saveToFeishu as feishuSaveToFeishu } from '@/services/feishuService';
 import { buildFeishuSavedContentTarget, buildMarkdownSavedContentTarget, createSavedContentRecord } from '@/utils/savedContent';
 import { createExtensionUpdateNotice, shouldClearUpdateBadgeOnLaunch } from '@/utils/updateNotice';
+import { createDefaultKnowledgeMetadata } from '@/utils/knowledgeMetadata';
+import { generateMarkdown, generateMarkdownFilename } from '@/utils/markdownGenerator';
 
 // 右键菜单 ID
 const CONTEXT_MENU_ID = 'save-to-feishu-menu';
 const CONTEXT_MENU_DIRECT = 'save-to-feishu-direct';
+const CONTEXT_MENU_EXCERPT_MARKDOWN = 'save-to-feishu-excerpt-markdown';
+const CONTEXT_MENU_EXCERPT_OPTIONS = 'save-to-feishu-excerpt-options';
+const CONTEXT_MENU_EXCERPT_TABLE_PREFIX = 'save-to-feishu-excerpt-table:';
 
 /**
  * 缓存的最新页面内容
@@ -26,7 +31,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   } else if (message.action === 'getSaveMode') {
     getSaveMode()
       .then(saveMode => sendResponse({ saveMode }))
-      .catch(() => sendResponse({ saveMode: 'feishu' }));
+      .catch(() => sendResponse({ saveMode: 'markdown' }));
     return true;
   } else if (message.action === 'recordMarkdownSave') {
     if (message.content) {
@@ -64,6 +69,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   } else if (message.action === 'saveTableConfigs') {
     saveTableConfigs(message.tables)
       .then(() => {
+        createContextMenus();
         sendResponse({ success: true });
       })
       .catch(error => {
@@ -139,7 +145,7 @@ function createContextMenus() {
     chrome.contextMenus.create({
       id: CONTEXT_MENU_ID,
       title: '保存到飞书',
-      contexts: ['page', 'link', 'image'],
+      contexts: ['page', 'link', 'image', 'selection'],
     });
 
     // 创建子菜单：直接保存到第一个表格
@@ -149,6 +155,35 @@ function createContextMenus() {
       title: '直接保存到第一个表格',
       contexts: ['page'],
     });
+
+    chrome.contextMenus.create({
+      id: CONTEXT_MENU_EXCERPT_MARKDOWN,
+      parentId: CONTEXT_MENU_ID,
+      title: '保存选中摘录为 Markdown',
+      contexts: ['selection'],
+    });
+
+    chrome.contextMenus.create({
+      id: CONTEXT_MENU_EXCERPT_OPTIONS,
+      parentId: CONTEXT_MENU_ID,
+      title: '打开设置配置资料库...',
+      contexts: ['selection'],
+    });
+
+    getTableConfigs()
+      .then(tables => {
+        tables.slice(0, 8).forEach(table => {
+          chrome.contextMenus.create({
+            id: getExcerptTableMenuId(table.id),
+            parentId: CONTEXT_MENU_ID,
+            title: `保存选中摘录到：${truncateMenuTitle(table.name || '未命名资料库')}`,
+            contexts: ['selection'],
+          });
+        });
+      })
+      .catch(error => {
+        console.warn('创建摘录右键菜单失败:', error);
+      });
 
     console.log('右键菜单已创建');
   });
@@ -198,8 +233,196 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   } else if (info.menuItemId === CONTEXT_MENU_DIRECT) {
     // 直接保存到第一个表格
     await handleDirectSave(tab.id);
+  } else if (info.menuItemId === CONTEXT_MENU_EXCERPT_MARKDOWN) {
+    await handleSelectionExcerptSave(tab, info, { type: 'markdown' });
+  } else if (info.menuItemId === CONTEXT_MENU_EXCERPT_OPTIONS) {
+    chrome.runtime.openOptionsPage();
+  } else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith(CONTEXT_MENU_EXCERPT_TABLE_PREFIX)) {
+    const tableId = info.menuItemId.slice(CONTEXT_MENU_EXCERPT_TABLE_PREFIX.length);
+    await handleSelectionExcerptSave(tab, info, { type: 'feishu', tableId });
   }
 });
+
+function getExcerptTableMenuId(tableId: string): string {
+  return `${CONTEXT_MENU_EXCERPT_TABLE_PREFIX}${tableId}`;
+}
+
+function truncateMenuTitle(value: string, maxLength = 28): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength).trim()}...` : normalized;
+}
+
+async function buildSelectionExcerptContent(
+  tab: chrome.tabs.Tab,
+  info: chrome.contextMenus.OnClickData
+): Promise<{ content: ExtractedPageContent; metadata: KnowledgeMetadata; htmlElements: HtmlElementInfo[] }> {
+  const excerpt = info.selectionText?.replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim() || '';
+  if (!excerpt) {
+    throw new Error('没有读取到选中的文字，请重新选中一段内容后再右键保存。');
+  }
+
+  const fallbackUrl = info.pageUrl || tab.url || '';
+  const fallbackTitle = tab.title || '未命名网页';
+  let pageInfo: { title: string; url: string; mainImage?: string } = {
+    title: fallbackTitle,
+    url: fallbackUrl,
+  };
+
+  if (tab.id) {
+    try {
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          const getMeta = (name: string, property?: string): string => {
+            const selector = property
+              ? `meta[property="${property}"]`
+              : `meta[name="${name}"], meta[property="${name}"]`;
+            return document.querySelector(selector)?.getAttribute('content') || '';
+          };
+          return {
+            title: getMeta('title', 'og:title') || document.title || '',
+            url: window.location.href,
+            mainImage: getMeta('image', 'og:image'),
+          };
+        },
+      });
+      if (result?.result) {
+        pageInfo = {
+          title: result.result.title || fallbackTitle,
+          url: result.result.url || fallbackUrl,
+          mainImage: result.result.mainImage || undefined,
+        };
+      }
+    } catch (error) {
+      console.warn('读取页面元信息失败，使用右键事件信息:', error);
+    }
+  }
+
+  const content: ExtractedPageContent = {
+    title: `摘录：${pageInfo.title || fallbackTitle}`,
+    url: pageInfo.url || fallbackUrl,
+    content: excerpt,
+    description: excerpt.length > 160 ? `${excerpt.slice(0, 160).trim()}...` : excerpt,
+    selectedText: excerpt,
+    mainImage: pageInfo.mainImage,
+    savedAt: new Date().toISOString(),
+    contentKind: 'excerpt',
+    excerptType: '观点',
+  };
+
+  return {
+    content,
+    metadata: createDefaultKnowledgeMetadata(content, {
+      contentType: '内容素材',
+      excerptType: '观点',
+      customFields: {},
+    }),
+    htmlElements: [{ type: 'quote', content: excerpt }],
+  };
+}
+
+async function handleSelectionExcerptSave(
+  tab: chrome.tabs.Tab,
+  info: chrome.contextMenus.OnClickData,
+  target: { type: 'markdown' } | { type: 'feishu'; tableId: string }
+): Promise<void> {
+  if (!tab.id) return;
+
+  try {
+    const { content, metadata, htmlElements } = await buildSelectionExcerptContent(tab, info);
+    const clipFields = await getClipFields();
+
+    if (target.type === 'markdown') {
+      const markdown = generateMarkdown(content, htmlElements, { metadata, clipFields });
+      const filename = generateMarkdownFilename(content.title);
+      await downloadMarkdownFromTab(tab.id, markdown, filename);
+      await rememberSavedContent(createSavedContentRecord({
+        content,
+        target: buildMarkdownSavedContentTarget(),
+        metadata,
+      }));
+      await showPageToast(tab.id, '已保存 Markdown 摘录', 'success');
+      await showActionBadge('✓', '#1f8f4d');
+      return;
+    }
+
+    const tables = await getTableConfigs();
+    const table = tables.find(item => item.id === target.tableId);
+    if (!table) {
+      throw new Error('没有找到这个飞书资料库，请重新加载扩展或到设置页检查配置。');
+    }
+
+    const result = await feishuSaveToFeishu(table, content, htmlElements, metadata, clipFields);
+    if (!result.success) {
+      throw new Error(result.error || '保存摘录失败');
+    }
+
+    await rememberSavedContent(createSavedContentRecord({
+      content,
+      target: buildFeishuSavedContentTarget(table),
+      result,
+      metadata,
+    }));
+    await showPageToast(tab.id, `已保存摘录到 ${table.name || '飞书资料库'}`, 'success');
+    await showActionBadge('✓', '#1f8f4d');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '保存摘录失败';
+    console.error('保存选中摘录失败:', error);
+    await showPageToast(tab.id, message, 'error');
+    await showActionBadge('!', '#d92d20');
+  }
+}
+
+async function downloadMarkdownFromTab(tabId: number, markdown: string, filename: string): Promise<void> {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    args: [markdown, filename],
+    func: (markdownText: string, downloadName: string) => {
+      const blob = new Blob([markdownText], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = downloadName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+  });
+}
+
+async function showPageToast(tabId: number, message: string, type: 'success' | 'error'): Promise<void> {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      args: [message, type],
+      func: (toastMessage: string, toastType: 'success' | 'error') => {
+        document.getElementById('save-to-feishu-context-toast')?.remove();
+        const toast = document.createElement('div');
+        toast.id = 'save-to-feishu-context-toast';
+        toast.textContent = toastMessage;
+        toast.style.cssText = [
+          'position:fixed',
+          'top:20px',
+          'right:20px',
+          'z-index:2147483647',
+          'max-width:320px',
+          'padding:12px 16px',
+          'border-radius:8px',
+          'font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+          'box-shadow:0 10px 30px rgba(15,23,42,0.18)',
+          toastType === 'success'
+            ? 'background:#ecfdf3;color:#05603a;border:1px solid #abefc6'
+            : 'background:#fff4ed;color:#b42318;border:1px solid #fecdca',
+        ].join(';');
+        document.body.appendChild(toast);
+        window.setTimeout(() => toast.remove(), 2800);
+      },
+    });
+  } catch (error) {
+    console.warn('页面提示展示失败:', error);
+  }
+}
 
 /**
  * 直接保存到第一个表格

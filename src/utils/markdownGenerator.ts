@@ -39,10 +39,12 @@ export function generateMarkdown(
   const lines: string[] = [];
   const metadata = options.metadata;
   const clipFields = normalizeClipFields(options.clipFields);
+  const isExcerpt = content.contentKind === 'excerpt' || Boolean(metadata?.excerptType);
 
   lines.push('---');
   lines.push(`title: ${renderYamlValue(content.title)}`);
   lines.push(`url: ${renderYamlValue(content.url)}`);
+  lines.push(`clip_kind: ${renderYamlValue(isExcerpt ? 'excerpt' : 'page')}`);
   lines.push(`source: ${renderYamlValue(metadata?.source || getHostname(content.url))}`);
   lines.push(`saved_at: ${renderYamlValue(content.savedAt)}`);
   if (content.publishedAt) {
@@ -54,6 +56,9 @@ export function generateMarkdown(
   lines.push(`status: ${renderYamlValue(metadata?.status || '未处理')}`);
   if (metadata?.contentType) {
     lines.push(`content_type: ${renderYamlValue(metadata.contentType)}`);
+  }
+  if (metadata?.excerptType || content.excerptType) {
+    lines.push(`excerpt_type: ${renderYamlValue(metadata?.excerptType || content.excerptType)}`);
   }
   if (metadata?.reviewAt) {
     lines.push(`review_at: ${renderYamlValue(metadata.reviewAt)}`);
@@ -85,7 +90,10 @@ export function generateMarkdown(
   lines.push('');
 
   // 标题
-  lines.push(`# ${content.title}`);
+  const markdownTitle = isExcerpt && !content.title.startsWith('摘录：')
+    ? `摘录：${content.title}`
+    : content.title;
+  lines.push(`# ${markdownTitle}`);
   lines.push('');
 
   // 元信息
@@ -94,7 +102,10 @@ export function generateMarkdown(
     metaLines.push(`- **链接**: ${content.url}`);
   }
   if (content.selectedText) {
-    metaLines.push('- **剪藏范围**: 选中文本');
+    metaLines.push(`- **剪藏范围**: ${isExcerpt ? '高质量摘录' : '选中文本'}`);
+  }
+  if (metadata?.excerptType || content.excerptType) {
+    metaLines.push(`- **摘录类型**: ${metadata?.excerptType || content.excerptType}`);
   }
   if (content.publishedAt) {
     metaLines.push(`- **发布时间**: ${content.publishedAt}`);
@@ -131,13 +142,17 @@ export function generateMarkdown(
   }
 
   if (metadata?.excerpt) {
-    lines.push('## 摘录');
+    lines.push(isExcerpt ? '## 摘录正文' : '## 摘录');
     lines.push('');
     lines.push(`> ${metadata.excerpt.replace(/\n+/g, '\n> ')}`);
     lines.push('');
   }
 
   // 正文内容
+  if (isExcerpt && metadata?.excerpt) {
+    return lines.join('\n');
+  }
+
   if (htmlElements && htmlElements.length > 0) {
     let inList = false;        // 当前是否在列表组中
     let orderedIndex = 0;      // 有序列表计数器
@@ -232,6 +247,17 @@ export function generateMarkdown(
           } else {
             lines.push(el.content || '');
           }
+          lines.push('');
+          orderedIndex = 0;
+          break;
+        }
+        case 'media': {
+          if (inList) {
+            lines.push('');
+            inList = false;
+          }
+          const label = el.content || ({ video: '视频', audio: '音频', embed: '嵌入内容', 'mini-program': '小程序' }[el.mediaType || 'embed']);
+          lines.push(el.linkUrl ? `[${label}](${el.linkUrl})` : `[${label}]`);
           lines.push('');
           orderedIndex = 0;
           break;

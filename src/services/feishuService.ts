@@ -532,6 +532,9 @@ export async function saveToFeishu(
         case 'excerpt':
           value = metadata?.excerpt || content.selectedText || content.description || '';
           break;
+        case 'excerptType':
+          value = metadata?.excerptType || content.excerptType || '';
+          break;
         case 'aiField':
           value = metadata?.customFields?.[mapping.aiFieldId || getAiFieldId(mapping.feishuFieldId)] || '';
           break;

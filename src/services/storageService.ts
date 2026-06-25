@@ -2,12 +2,12 @@ import type { AiProviderConfig, AppConfig, TableConfig, FeishuCredentials, Notio
 import { saveEncryptedToStorage, loadEncryptedFromStorage, clearEncryptedStorage } from '@/utils/encryption';
 import { parseAndValidateConfig, repairConfig } from '@/utils/validator';
 import { getDefaultClipFields, normalizeClipFields } from '@/utils/clipFields';
-import { normalizeSavedContentRecords, upsertSavedContentRecord } from '@/utils/savedContent';
+import { normalizeSavedContentRecords, updateSavedContentReviewAt, upsertSavedContentRecord } from '@/utils/savedContent';
 import { dismissExtensionUpdateNotice, normalizeExtensionUpdateNotice } from '@/utils/updateNotice';
 import { DEFAULT_AI_PROVIDER_CONFIG, normalizeAiProviderConfig, sanitizeAiProviderConfigForExport } from '@/utils/aiProvider';
 import { completeRatingPrompt, DEFAULT_PRODUCT_ENGAGEMENT, dismissRatingPrompt, normalizeProductEngagement, recordSuccessfulSave } from '@/utils/engagement';
 
-const CONFIG_VERSION = '0.5.5';
+const CONFIG_VERSION = '0.5.8';
 
 /**
  * 获取默认配置
@@ -28,7 +28,8 @@ function getDefaultConfig(): AppConfig {
     productEngagement: { ...DEFAULT_PRODUCT_ENGAGEMENT },
     updateNotice: null,
     aiProvider: { ...DEFAULT_AI_PROVIDER_CONFIG },
-    saveMode: 'feishu',
+    // 首次使用无需连接飞书即可完成一条本地剪藏。
+    saveMode: 'markdown',
     version: CONFIG_VERSION,
   };
 }
@@ -48,6 +49,8 @@ export async function loadConfig(): Promise<AppConfig> {
   if (!data) {
     return getDefaultConfig();
   }
+  const storedConfig = data as Partial<AppConfig>;
+  const storedTables = Array.isArray(storedConfig.tables) ? storedConfig.tables : [];
   return {
     ...getDefaultConfig(),
     ...(data as AppConfig),
@@ -55,13 +58,16 @@ export async function loadConfig(): Promise<AppConfig> {
       ...getDefaultConfig().notion,
       ...((data as Partial<AppConfig>).notion || {}),
     },
-    interopConfigs: (data as Partial<AppConfig>).interopConfigs || [],
-    clipFields: normalizeClipFields((data as Partial<AppConfig>).clipFields),
-    savedContents: normalizeSavedContentRecords((data as Partial<AppConfig>).savedContents),
-    productEngagement: normalizeProductEngagement((data as Partial<AppConfig>).productEngagement),
-    updateNotice: normalizeExtensionUpdateNotice((data as Partial<AppConfig>).updateNotice),
-    aiProvider: normalizeAiProviderConfig((data as Partial<AppConfig>).aiProvider),
-    saveMode: (data as Partial<AppConfig>).saveMode || 'feishu',
+    tables: storedTables,
+    interopConfigs: storedConfig.interopConfigs || [],
+    clipFields: normalizeClipFields(storedConfig.clipFields),
+    savedContents: normalizeSavedContentRecords(storedConfig.savedContents),
+    productEngagement: normalizeProductEngagement(storedConfig.productEngagement),
+    updateNotice: normalizeExtensionUpdateNotice(storedConfig.updateNotice),
+    aiProvider: normalizeAiProviderConfig(storedConfig.aiProvider),
+    // 仅兼容没有保存方式字段的旧配置：已有资料库继续飞书优先，空配置改走本地 Markdown。
+    saveMode: storedConfig.saveMode || (storedTables.length > 0 ? 'feishu' : 'markdown'),
+    version: CONFIG_VERSION,
   };
 }
 
@@ -101,7 +107,7 @@ export async function saveSaveMode(saveMode: SaveMode): Promise<void> {
 
 export async function getSaveMode(): Promise<SaveMode> {
   const config = await loadConfig();
-  return config.saveMode || 'feishu';
+  return config.saveMode || (config.tables?.length > 0 ? 'feishu' : 'markdown');
 }
 
 export async function getClipFields(): Promise<ClipFieldConfig[]> {
@@ -138,6 +144,20 @@ export async function rememberSavedContent(record: SavedContentRecord): Promise<
     record
   );
   config.productEngagement = recordSuccessfulSave(config.productEngagement);
+  await saveConfig(config);
+  return config.savedContents;
+}
+
+export async function setSavedContentReviewAt(
+  recordKey: string,
+  reviewAt?: string
+): Promise<SavedContentRecord[]> {
+  const config = await loadConfig();
+  config.savedContents = updateSavedContentReviewAt(
+    normalizeSavedContentRecords(config.savedContents),
+    recordKey,
+    reviewAt
+  );
   await saveConfig(config);
   return config.savedContents;
 }

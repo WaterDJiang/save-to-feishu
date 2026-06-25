@@ -294,7 +294,7 @@ textarea {
 
 .sp-library-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
   background: #fff;
   border: 1px solid var(--sp-line);
@@ -375,8 +375,14 @@ textarea {
   text-overflow: ellipsis;
 }
 
-.sp-library-target {
-  width: 34px;
+.sp-library-actions {
+  display: flex;
+  align-items: stretch;
+  background: #f8fafc;
+}
+
+.sp-library-target,
+.sp-library-review-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -387,9 +393,32 @@ textarea {
   cursor: pointer;
 }
 
-.sp-library-target:hover {
+.sp-library-target {
+  width: 34px;
+}
+
+.sp-library-review-action {
+  gap: 4px;
+  min-width: 58px;
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.sp-library-target:hover,
+.sp-library-review-action:hover {
   color: var(--sp-blue);
   background: var(--sp-blue-soft);
+}
+
+.sp-library-review-action.is-remove {
+  color: var(--sp-red);
+}
+
+.sp-library-review-action.is-remove:hover {
+  color: #b42318;
+  background: rgba(217, 45, 32, 0.08);
 }
 
 .sp-library-empty {
@@ -543,6 +572,61 @@ textarea {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.sp-excerpt-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px;
+  color: var(--sp-text);
+  background: #fff;
+  border: 1px solid var(--sp-line);
+  border-radius: 12px;
+}
+
+.sp-excerpt-entry.is-ready {
+  border-color: rgba(20, 86, 217, 0.22);
+  background: #f8fbff;
+}
+
+.sp-excerpt-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sp-excerpt-copy strong {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.sp-excerpt-copy span {
+  color: var(--sp-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.sp-inline-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  color: #9a3412;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sp-inline-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .sp-update-section {
@@ -907,6 +991,94 @@ button.sp-update-item:hover {
   background: #fff;
   border-color: rgba(11, 87, 208, 0.35);
   box-shadow: 0 0 0 3px var(--sp-blue-soft);
+}
+
+.sp-review-schedule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 8px 10px;
+  margin-top: 10px;
+  padding: 10px;
+  background: linear-gradient(135deg, rgba(20, 86, 217, 0.06), #fff 58%);
+  border: 1px solid rgba(20, 86, 217, 0.16);
+  border-radius: 10px;
+}
+
+.sp-review-schedule-heading {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--sp-blue);
+}
+
+.sp-review-schedule-heading > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.sp-review-schedule-heading > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sp-review-schedule-heading strong {
+  color: var(--sp-text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.sp-review-schedule-heading small {
+  color: var(--sp-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.sp-review-schedule > input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  color: var(--sp-text);
+  background: #fff;
+  border: 1px solid var(--sp-line);
+  border-radius: 8px;
+  outline: none;
+  font-size: 12px;
+}
+
+.sp-review-schedule > input:focus {
+  border-color: var(--sp-blue-line);
+  box-shadow: 0 0 0 3px var(--sp-blue-soft);
+}
+
+.sp-review-quick-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.sp-review-quick-actions button {
+  min-height: 26px;
+  padding: 4px 8px;
+  color: var(--sp-blue);
+  background: #fff;
+  border: 1px solid var(--sp-blue-line);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sp-review-quick-actions button:hover {
+  background: var(--sp-blue-soft);
+}
+
+.sp-review-quick-actions button.is-clear {
+  color: var(--sp-muted);
+  border-color: var(--sp-line);
 }
 
 .sp-field-toggle,

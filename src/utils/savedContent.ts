@@ -1,4 +1,6 @@
 import type {
+  ContentKind,
+  ExcerptType,
   ExtractedPageContent,
   KnowledgeMetadata,
   SaveResult,
@@ -8,6 +10,7 @@ import type {
 } from '@/types';
 
 export const SAVED_CONTENT_HISTORY_LIMIT = 300;
+const EXCERPT_TYPES: ExcerptType[] = ['观点', '案例', '数据', '金句', '问题', '其他'];
 
 const TRACKING_PARAMS = new Set([
   'fbclid',
@@ -22,6 +25,33 @@ const TRACKING_PARAMS = new Set([
 function isTrackingParam(name: string): boolean {
   const lower = name.toLowerCase();
   return lower.startsWith('utm_') || TRACKING_PARAMS.has(lower);
+}
+
+function normalizeExcerptType(value: unknown): ExcerptType | undefined {
+  return typeof value === 'string' && EXCERPT_TYPES.includes(value as ExcerptType)
+    ? value as ExcerptType
+    : undefined;
+}
+
+export function getLocalDateKey(date = new Date()): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+export function getRelativeLocalDateKey(days: number, from = new Date()): string {
+  const date = new Date(from);
+  date.setDate(date.getDate() + days);
+  return getLocalDateKey(date);
+}
+
+export function isSavedContentReviewDue(
+  record: Pick<SavedContentRecord, 'reviewAt'>,
+  today = new Date()
+): boolean {
+  return Boolean(record.reviewAt && record.reviewAt <= getLocalDateKey(today));
 }
 
 export function normalizeSavedContentUrl(value: string): string {
@@ -81,8 +111,13 @@ export function buildMarkdownSavedContentTarget(): SavedContentTarget {
   };
 }
 
-export function getSavedContentKey(url: string, target: SavedContentTarget): string {
-  return `${target.id}::${normalizeSavedContentUrl(url)}`;
+export function getSavedContentKey(
+  url: string,
+  target: SavedContentTarget,
+  contentKind: ContentKind = 'page'
+): string {
+  const suffix = contentKind === 'excerpt' ? '::excerpt' : '';
+  return `${target.id}::${normalizeSavedContentUrl(url)}${suffix}`;
 }
 
 export function createSavedContentRecord({
@@ -92,20 +127,24 @@ export function createSavedContentRecord({
   metadata,
   savedAt = new Date().toISOString(),
 }: {
-  content: Pick<ExtractedPageContent, 'url' | 'title'>;
+  content: Pick<ExtractedPageContent, 'url' | 'title' | 'contentKind' | 'excerptType'>;
   target: SavedContentTarget;
   result?: SaveResult;
-  metadata?: Pick<KnowledgeMetadata, 'status' | 'reviewAt'>;
+  metadata?: Pick<KnowledgeMetadata, 'status' | 'reviewAt' | 'excerptType'>;
   savedAt?: string;
 }): SavedContentRecord {
   const normalizedUrl = normalizeSavedContentUrl(content.url);
+  const contentKind = content.contentKind || (metadata?.excerptType ? 'excerpt' : 'page');
+  const excerptType = normalizeExcerptType(content.excerptType || metadata?.excerptType);
 
   return {
-    key: `${target.id}::${normalizedUrl}`,
+    key: `${target.id}::${normalizedUrl}${contentKind === 'excerpt' ? '::excerpt' : ''}`,
     url: content.url,
     normalizedUrl,
     title: content.title || '未命名网页',
     savedAt,
+    contentKind,
+    excerptType,
     status: metadata?.status || undefined,
     reviewAt: metadata?.reviewAt || undefined,
     targetType: target.type,
@@ -133,14 +172,8 @@ export function getDueReviewRecords(
   records: SavedContentRecord[],
   today = new Date()
 ): SavedContentRecord[] {
-  const todayKey = [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, '0'),
-    String(today.getDate()).padStart(2, '0'),
-  ].join('-');
-
   return records
-    .filter(record => Boolean(record.reviewAt && record.reviewAt <= todayKey))
+    .filter(record => isSavedContentReviewDue(record, today))
     .sort((a, b) => {
       const byReviewDate = String(a.reviewAt).localeCompare(String(b.reviewAt));
       return byReviewDate || Date.parse(b.savedAt) - Date.parse(a.savedAt);
@@ -150,9 +183,10 @@ export function getDueReviewRecords(
 export function findSavedContentRecord(
   records: SavedContentRecord[],
   url: string,
-  target: SavedContentTarget
+  target: SavedContentTarget,
+  contentKind: ContentKind = 'page'
 ): SavedContentRecord | undefined {
-  const key = getSavedContentKey(url, target);
+  const key = getSavedContentKey(url, target, contentKind);
   return records.find(record => record.key === key);
 }
 
@@ -167,6 +201,19 @@ export function upsertSavedContentRecord(
   ].slice(0, limit);
 }
 
+export function updateSavedContentReviewAt(
+  records: SavedContentRecord[],
+  recordKey: string,
+  reviewAt?: string
+): SavedContentRecord[] {
+  const normalizedReviewAt = reviewAt?.trim() || undefined;
+  return records.map(record => (
+    record.key === recordKey
+      ? { ...record, reviewAt: normalizedReviewAt }
+      : record
+  ));
+}
+
 export function normalizeSavedContentRecords(value: unknown): SavedContentRecord[] {
   if (!Array.isArray(value)) return [];
 
@@ -179,15 +226,22 @@ export function normalizeSavedContentRecords(value: unknown): SavedContentRecord
         typeof (record as SavedContentRecord).targetId === 'string'
       );
     })
-    .map(record => ({
-      ...record,
-      normalizedUrl: normalizeSavedContentUrl(record.normalizedUrl || record.url),
-      key: record.key || `${record.targetId}::${normalizeSavedContentUrl(record.url)}`,
-      title: record.title || '未命名网页',
-      savedAt: record.savedAt || new Date().toISOString(),
-      status: typeof record.status === 'string' && record.status.trim() ? record.status : undefined,
-      reviewAt: typeof record.reviewAt === 'string' && record.reviewAt.trim() ? record.reviewAt : undefined,
-      targetName: record.targetName || (record.targetType === 'markdown' ? '本地 Markdown' : '飞书资料库'),
-    }))
+    .map(record => {
+      const contentKind: ContentKind = record.contentKind === 'excerpt' ? 'excerpt' : 'page';
+      const normalizedUrl = normalizeSavedContentUrl(record.normalizedUrl || record.url);
+
+      return {
+        ...record,
+        normalizedUrl,
+        contentKind,
+        excerptType: normalizeExcerptType(record.excerptType),
+        key: record.key || `${record.targetId}::${normalizedUrl}${contentKind === 'excerpt' ? '::excerpt' : ''}`,
+        title: record.title || '未命名网页',
+        savedAt: record.savedAt || new Date().toISOString(),
+        status: typeof record.status === 'string' && record.status.trim() ? record.status : undefined,
+        reviewAt: typeof record.reviewAt === 'string' && record.reviewAt.trim() ? record.reviewAt : undefined,
+        targetName: record.targetName || (record.targetType === 'markdown' ? '本地 Markdown' : '飞书资料库'),
+      };
+    })
     .slice(0, SAVED_CONTENT_HISTORY_LIMIT);
 }

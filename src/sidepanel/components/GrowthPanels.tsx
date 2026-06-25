@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   AlertCircle,
   CalendarDays,
+  CalendarPlus,
   CheckCircle,
   ChevronRight,
   Clock,
@@ -11,11 +12,18 @@ import {
   History,
   Loader2,
   Star,
+  Trash2,
   X,
 } from 'lucide-react';
 import type { ExtensionUpdateNotice, SavedContentRecord } from '@/types';
 import { getSourceHostname } from '@/utils/knowledgeMetadata';
-import { getDueReviewRecords, getRecentSavedContentRecords } from '@/utils/savedContent';
+import {
+  getDueReviewRecords,
+  getLocalDateKey,
+  getRecentSavedContentRecords,
+  getRelativeLocalDateKey,
+  isSavedContentReviewDue,
+} from '@/utils/savedContent';
 
 type LibraryView = 'due' | 'recent';
 
@@ -62,12 +70,14 @@ export function SavedContentLibrary({
   onBack,
   onOpenOriginal,
   onOpenTarget,
+  onReviewAtChange,
   formatSavedAt,
 }: {
   records: SavedContentRecord[];
   onBack: () => void;
   onOpenOriginal: (record: SavedContentRecord) => void;
   onOpenTarget: (record: SavedContentRecord) => void;
+  onReviewAtChange: (record: SavedContentRecord, reviewAt?: string) => void;
   formatSavedAt: (value: string) => string;
 }) {
   const [view, setView] = useState<LibraryView>('due');
@@ -142,17 +152,42 @@ export function SavedContentLibrary({
                     </span>
                   </span>
                 </button>
-                {(record.documentUrl || record.tableUrl) && (
-                  <button
-                    className="sp-library-target"
-                    onClick={() => onOpenTarget(record)}
-                    title={record.documentUrl ? '打开飞书文档' : '打开飞书资料库'}
-                    aria-label={record.documentUrl ? '打开飞书文档' : '打开飞书资料库'}
-                    type="button"
-                  >
-                    <ExternalLink size={14} />
-                  </button>
-                )}
+                <div className="sp-library-actions">
+                  {(record.documentUrl || record.tableUrl) && (
+                    <button
+                      className="sp-library-target"
+                      onClick={() => onOpenTarget(record)}
+                      title={record.documentUrl ? '打开飞书文档' : '打开飞书资料库'}
+                      aria-label={record.documentUrl ? '打开飞书文档' : '打开飞书资料库'}
+                      type="button"
+                    >
+                      <ExternalLink size={14} />
+                    </button>
+                  )}
+                  {view === 'due' ? (
+                    <button
+                      className="sp-library-review-action is-remove"
+                      onClick={() => onReviewAtChange(record, undefined)}
+                      title="移出待回顾，不删除最近保存记录"
+                      aria-label={`将 ${record.title} 移出待回顾`}
+                      type="button"
+                    >
+                      <Trash2 size={14} />
+                      <span>移出</span>
+                    </button>
+                  ) : !isSavedContentReviewDue(record) ? (
+                    <button
+                      className="sp-library-review-action"
+                      onClick={() => onReviewAtChange(record, getLocalDateKey())}
+                      title="加入待回顾"
+                      aria-label={`将 ${record.title} 加入待回顾`}
+                      type="button"
+                    >
+                      <CalendarPlus size={14} />
+                      <span>待回顾</span>
+                    </button>
+                  ) : null}
+                </div>
               </article>
             ))}
           </div>
@@ -169,6 +204,38 @@ export function SavedContentLibrary({
         )}
       </section>
     </main>
+  );
+}
+
+export function ReviewScheduleField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="sp-review-schedule">
+      <div className="sp-review-schedule-heading">
+        <CalendarDays size={16} />
+        <span>
+          <strong>下次回顾</strong>
+          <small>到期后会出现在“待回顾”中。</small>
+        </span>
+      </div>
+      <input
+        type="date"
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        aria-label="下次回顾日期"
+      />
+      <div className="sp-review-quick-actions" aria-label="快捷设置回顾日期">
+        <button onClick={() => onChange(getLocalDateKey())} type="button">今天</button>
+        <button onClick={() => onChange(getRelativeLocalDateKey(1))} type="button">明天</button>
+        <button onClick={() => onChange(getRelativeLocalDateKey(7))} type="button">7 天后</button>
+        {value && <button className="is-clear" onClick={() => onChange('')} type="button">清除</button>}
+      </div>
+    </div>
   );
 }
 
@@ -248,7 +315,7 @@ export function ExtensionUpdateCard({
               </span>
               <span className="sp-update-copy">
                 <strong>{highlight}</strong>
-                <small>{index === 0 ? '侧栏顶部即可进入' : '设置页可复制与导入'}</small>
+                <small>{index === 0 ? '两个入口同时展示，可按当前需要选择' : '无需连接飞书，也可直接下载 .md 文件'}</small>
               </span>
             </div>
           ))}
@@ -262,8 +329,8 @@ export function ExtensionUpdateCard({
       <div className="sp-update-head">
         <span className="sp-update-badge">NEW</span>
         <span className="sp-update-title">
-          <strong>0.5.5 知识回访升级</strong>
-          <small>保存后更容易找回与复用</small>
+          <strong>0.5.8 高质量摘录</strong>
+          <small>选中文本后右键保存到飞书或 Markdown</small>
         </span>
       </div>
       <div className="sp-update-items">
@@ -272,8 +339,8 @@ export function ExtensionUpdateCard({
             <History size={15} />
           </span>
           <span className="sp-update-copy">
-            <strong>最近保存与待回顾</strong>
-            <small>点开知识回访中心</small>
+            <strong>右键保存摘录</strong>
+            <small>阅读时直接保存观点、案例、数据和金句</small>
           </span>
           <ChevronRight size={15} />
         </button>
@@ -282,8 +349,8 @@ export function ExtensionUpdateCard({
             <Database size={15} />
           </span>
           <span className="sp-update-copy">
-            <strong>资料库模板可分享</strong>
-            <small>在设置页复制或导入</small>
+            <strong>摘录字段可映射</strong>
+            <small>将摘录类型和正文写入飞书资料库</small>
           </span>
           <ChevronRight size={15} />
         </button>

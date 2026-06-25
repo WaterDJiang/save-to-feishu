@@ -24,32 +24,37 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
         <div className="help-modal-body">
           {/* 快速开始 */}
           <section className="help-section">
-            <h3>🚀 快速开始（跟着做 5 步）</h3>
+            <h3>🚀 快速开始（飞书与 Markdown 都可以）</h3>
             <div className="help-quickstart">
               <div className="help-step-card">
                 <span className="help-step-num">1</span>
-                <h4>创建应用</h4>
-                <p>在飞书开放平台创建「企业自建应用」</p>
+                <h4>打开网页</h4>
+                <p>点击插件图标，打开剪藏侧栏</p>
               </div>
               <div className="help-step-card">
                 <span className="help-step-num">2</span>
-                <h4>复制钥匙</h4>
-                <p>复制飞书给插件的两串钥匙</p>
+                <h4>保存 Markdown</h4>
+                <p>无需配置，立即下载一份网页笔记到电脑</p>
               </div>
               <div className="help-step-card">
                 <span className="help-step-num">3</span>
-                <h4>允许保存</h4>
-                <p>让这个应用可以读写你的飞书表格</p>
+                <h4>保存到飞书</h4>
+                <p>完成连接和资料库设置后，可保存给团队协作</p>
               </div>
               <div className="help-step-card">
                 <span className="help-step-num">4</span>
-                <h4>添加表格</h4>
-                <p>直接粘贴飞书表格链接，插件会自动识别</p>
+                <h4>两种方式都可用</h4>
+                <p>可选择仅电脑、仅飞书或两处各存一份</p>
               </div>
               <div className="help-step-card">
                 <span className="help-step-num">5</span>
-                <h4>开始剪藏</h4>
-                <p>点击插件图标，在侧栏里确认后保存</p>
+                <h4>保存高质量摘录</h4>
+                <p>选中网页片段后，直接右键保存到资料库或 Markdown</p>
+              </div>
+              <div className="help-step-card">
+                <span className="help-step-num">6</span>
+                <h4>回顾已保存内容</h4>
+                <p>在侧栏的“最近保存与待回顾”中查看记录</p>
               </div>
             </div>
           </section>
@@ -180,6 +185,18 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                     <td>阅读资料、行业研究、内容素材等分类</td>
                     <td><span className="help-badge">单选/文本</span></td>
                     <td>行业研究</td>
+                  </tr>
+                  <tr>
+                    <td><strong>摘录</strong></td>
+                    <td>保存选中文本时的高价值片段</td>
+                    <td><span className="help-badge">多行文本</span></td>
+                    <td>"这段观点可以作为选题开头..."</td>
+                  </tr>
+                  <tr>
+                    <td><strong>摘录类型</strong></td>
+                    <td>观点、案例、数据、金句、问题等分类</td>
+                    <td><span className="help-badge">单选/文本</span></td>
+                    <td>金句</td>
                   </tr>
                   <tr>
                     <td><strong>封面图片</strong></td>
@@ -463,7 +480,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
             <h3>🗂️ 最近保存、待回顾与共享模板</h3>
             <ul>
               <li>点击侧栏顶部的「最近保存与待回顾」，可以查看最近剪藏和已经到回顾日期的资料。</li>
-              <li>保存前在「更多整理信息」中设置下次回顾日期，资料到期后会进入待回顾列表。</li>
+              <li>保存前可直接设置下次回顾日期，也可以快捷选择今天、明天或 7 天后。</li>
+              <li>最近保存中的「待回顾」可把资料设为今天回顾；待回顾中的「移出」只清除回顾日期，不会删除保存记录。</li>
               <li>在资料库设置中点击「复制当前模板」，可以把字段结构分享给同事。</li>
               <li>共享模板不包含飞书凭证、Table ID、资料库链接、固定值或已保存网页内容。</li>
               <li>导入共享模板后，仍需选择自己的飞书表格、读取列名并主动保存设置。</li>

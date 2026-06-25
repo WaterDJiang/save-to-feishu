@@ -91,6 +91,32 @@ test('upsertSavedContentRecord replaces the existing entry and keeps newest reco
   assert.equal(records[0].title, 'Updated title');
 });
 
+test('page and excerpt records from the same URL are kept separately', () => {
+  const target = buildFeishuSavedContentTarget(tableA);
+  const pageRecord = createSavedContentRecord({
+    content: { title: 'Original page', url: 'https://example.com/articles/one' },
+    target,
+    savedAt: '2026-06-25T08:00:00.000Z',
+  });
+  const excerptRecord = createSavedContentRecord({
+    content: {
+      title: '摘录：Original page',
+      url: 'https://example.com/articles/one',
+      contentKind: 'excerpt',
+      excerptType: '金句',
+    },
+    target,
+    metadata: { excerptType: '金句' },
+    savedAt: '2026-06-25T08:05:00.000Z',
+  });
+
+  const records = upsertSavedContentRecord(upsertSavedContentRecord([], pageRecord), excerptRecord);
+
+  assert.equal(records.length, 2);
+  assert.equal(findSavedContentRecord(records, 'https://example.com/articles/one', target)?.title, 'Original page');
+  assert.equal(findSavedContentRecord(records, 'https://example.com/articles/one', target, 'excerpt')?.excerptType, '金句');
+});
+
 test('saved content records keep review metadata and due reviews are sorted by review date', () => {
   const target = buildFeishuSavedContentTarget(tableA);
   const later = createSavedContentRecord({
@@ -143,7 +169,7 @@ test('createExtensionUpdateNotice only creates an active notice for update event
   assert.equal(
     createExtensionUpdateNotice({
       reason: 'install',
-      version: '0.5.5',
+      version: '0.5.8',
       previousVersion: undefined,
       createdAt: 1770000000000,
     }),
@@ -153,19 +179,19 @@ test('createExtensionUpdateNotice only creates an active notice for update event
   assert.deepEqual(
     createExtensionUpdateNotice({
       reason: 'update',
-      version: '0.5.5',
-      previousVersion: '0.5.2',
+      version: '0.5.8',
+      previousVersion: '0.5.7',
       createdAt: 1770000000000,
     }),
     {
-      version: '0.5.5',
-      previousVersion: '0.5.2',
+      version: '0.5.8',
+      previousVersion: '0.5.7',
       createdAt: 1770000000000,
       dismissed: false,
       title: 'Save to Feishu 已更新',
       highlights: [
-        '新增最近保存与待回顾中心',
-        '资料库模板现在可以安全分享',
+        '选中网页文字后可右键保存为高质量摘录',
+        '摘录可直接保存到指定飞书资料库或 Markdown',
       ],
     }
   );
@@ -174,8 +200,8 @@ test('createExtensionUpdateNotice only creates an active notice for update event
 test('dismissExtensionUpdateNotice marks the active notice as dismissed', () => {
   const notice = createExtensionUpdateNotice({
     reason: 'update',
-    version: '0.5.5',
-    previousVersion: '0.5.2',
+    version: '0.5.8',
+    previousVersion: '0.5.7',
     createdAt: 1770000000000,
   });
 
@@ -185,8 +211,8 @@ test('dismissExtensionUpdateNotice marks the active notice as dismissed', () => 
 test('shouldClearUpdateBadgeOnLaunch only clears badge for an active update notice', () => {
   const notice = createExtensionUpdateNotice({
     reason: 'update',
-    version: '0.5.5',
-    previousVersion: '0.5.2',
+    version: '0.5.8',
+    previousVersion: '0.5.7',
     createdAt: 1770000000000,
   });
 

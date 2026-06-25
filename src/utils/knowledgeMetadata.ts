@@ -2,6 +2,7 @@ import type { ExtractedPageContent, KnowledgeMetadata } from '@/types';
 
 interface DefaultKnowledgeMetadataOptions {
   contentType?: KnowledgeMetadata['contentType'];
+  excerptType?: KnowledgeMetadata['excerptType'];
   customFields?: Record<string, string>;
 }
 
@@ -30,6 +31,7 @@ export function createDefaultKnowledgeMetadata(
     source: getSourceHostname(content.url),
     status: '未处理',
     contentType: options.contentType,
+    excerptType: options.excerptType || content.excerptType,
     excerpt: content.selectedText || content.description || '',
     note: '',
     reviewAt: '',

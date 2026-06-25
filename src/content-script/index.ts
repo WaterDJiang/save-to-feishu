@@ -5,6 +5,7 @@ import {
   getSourceHostname,
   parseKnowledgeTags,
 } from '@/utils/knowledgeMetadata';
+import { extractCurrentPageSnapshot } from '@/utils/pageExtraction';
 
 /**
  * 从 meta 标签获取内容
@@ -174,6 +175,9 @@ function extractPageHtml(): string {
  * 解析HTML为元素信息数组（在 content-script 中执行，因为 Service Worker 没有 DOMParser）
  */
 function parseHtmlToElements(html: string): HtmlElementInfo[] {
+  const sharedElements = extractCurrentPageSnapshot().htmlElements;
+  if (sharedElements.length > 0 || !html.trim()) return sharedElements;
+
   const elements: HtmlElementInfo[] = [];
 
   try {
@@ -332,6 +336,9 @@ function parseHtmlToElements(html: string): HtmlElementInfo[] {
  * 提取页面内容
  */
 function extractPageContent(): ExtractedPageContent {
+  const sharedContent = extractCurrentPageSnapshot().content;
+  if (sharedContent.content || sharedContent.title) return sharedContent;
+
   const title = document.title || '';
   const url = window.location.href;
   const description = getMetaContent('description', 'og:description') || '';
@@ -366,7 +373,7 @@ async function getTableConfigs(): Promise<TableConfig[]> {
 async function getSaveMode(): Promise<SaveMode> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ action: 'getSaveMode' }, (response) => {
-      resolve(response?.saveMode || 'feishu');
+      resolve(response?.saveMode || 'markdown');
     });
   });
 }
@@ -409,7 +416,7 @@ class FloatingPanel {
   private shadowRoot: ShadowRoot | null = null;
   private content: ExtractedPageContent | null = null;
   private metadata: KnowledgeMetadata | null = null;
-  private saveMode: SaveMode = 'feishu';
+  private saveMode: SaveMode = 'markdown';
   private tables: TableConfig[] = [];
   private selectedTable: TableConfig | null = null;
 

@@ -186,7 +186,7 @@ export function repairConfig(obj: any): AppConfig | null {
     }
 
     if (!['both', 'feishu', 'markdown'].includes(obj.saveMode)) {
-      obj.saveMode = 'feishu';
+      obj.saveMode = Array.isArray(obj.tables) && obj.tables.length > 0 ? 'feishu' : 'markdown';
     }
 
     obj.clipFields = normalizeClipFields(obj.clipFields);
@@ -197,7 +197,7 @@ export function repairConfig(obj: any): AppConfig | null {
     
     // 修复 version 字段
     if (typeof obj.version !== 'string') {
-      obj.version = '0.5.5';
+      obj.version = '0.5.8';
     }
     
     // 再次验证

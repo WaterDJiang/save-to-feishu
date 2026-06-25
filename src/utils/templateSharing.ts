@@ -24,6 +24,7 @@ const ALLOWED_SOURCE_TYPES: MappingSourceType[] = [
   'status',
   'contentType',
   'excerpt',
+  'excerptType',
   'aiField',
   'customFields',
   'note',

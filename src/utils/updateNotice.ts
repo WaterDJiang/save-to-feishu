@@ -1,8 +1,8 @@
 import type { ExtensionUpdateNotice } from '@/types';
 
 export const UPDATE_NOTICE_HIGHLIGHTS = [
-  '新增最近保存与待回顾中心',
-  '资料库模板现在可以安全分享',
+  '选中网页文字后可右键保存为高质量摘录',
+  '摘录可直接保存到指定飞书资料库或 Markdown',
 ] as const;
 
 export function createExtensionUpdateNotice({

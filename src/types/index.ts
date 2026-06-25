@@ -41,6 +41,7 @@ export type MappingSourceType =
   | 'status'
   | 'contentType'
   | 'excerpt'
+  | 'excerptType'
   | 'aiField'
   | 'customFields'
   | 'note'
@@ -98,6 +99,8 @@ export interface ProductEngagement {
 }
 
 export type SaveMode = 'both' | 'feishu' | 'markdown';
+export type ContentKind = 'page' | 'excerpt';
+export type ExcerptType = '观点' | '案例' | '数据' | '金句' | '问题' | '其他';
 
 /**
  * 提取的页面内容
@@ -111,6 +114,8 @@ export interface ExtractedPageContent {
   mainImage?: string;
   publishedAt?: string;
   savedAt: string;
+  contentKind?: ContentKind;
+  excerptType?: ExcerptType;
 }
 
 export type KnowledgeTemplateId = 'readingInbox' | 'researchLibrary' | 'contentIdeas';
@@ -131,6 +136,7 @@ export interface KnowledgeMetadata {
   source: string;
   status: string;
   contentType?: '阅读资料' | '行业研究' | '内容素材' | '工具文档' | '其他';
+  excerptType?: ExcerptType;
   excerpt?: string;
   note?: string;
   reviewAt?: string;
@@ -200,6 +206,8 @@ export interface SavedContentRecord {
   normalizedUrl: string;
   title: string;
   savedAt: string;
+  contentKind?: ContentKind;
+  excerptType?: ExcerptType;
   status?: string;
   reviewAt?: string;
   targetType: SavedContentTargetType;
@@ -301,12 +309,13 @@ export interface TextBlockContent {
  * HTML 元素信息（从 content-script 解析后传递给 background）
  */
 export interface HtmlElementInfo {
-  type: 'text' | 'heading' | 'image' | 'list' | 'link' | 'quote';
+  type: 'text' | 'heading' | 'image' | 'list' | 'link' | 'quote' | 'media';
   content?: string;
   level?: 1 | 2 | 3;
   imageUrl?: string;
   listType?: 'bullet' | 'ordered';
   linkUrl?: string;
+  mediaType?: 'video' | 'audio' | 'embed' | 'mini-program';
 }
 
 /**

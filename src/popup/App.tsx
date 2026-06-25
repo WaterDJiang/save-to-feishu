@@ -14,7 +14,6 @@ import {
   ArrowLeft,
   ChevronUp,
   ChevronDown,
-  FolderOpen,
   Link2,
   Clock,
   ExternalLink,
@@ -38,6 +37,8 @@ import {
   getSourceHostname,
   parseKnowledgeTags,
 } from '@/utils/knowledgeMetadata';
+import { extractCurrentPageSnapshot } from '@/utils/pageExtraction';
+import { MarkdownFirstSaveCard } from '@/components/MarkdownFirstSaveCard';
 
 /**
  * Apple 风格浮窗 - 保存到飞书
@@ -123,6 +124,13 @@ function getTableUrl(table: TableConfig): string {
 async function getHtmlElementsFromActiveTab(): Promise<HtmlElementInfo[] | undefined> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return undefined;
+
+  const sharedResults = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: extractCurrentPageSnapshot,
+  });
+  const sharedElements = sharedResults?.[0]?.result?.htmlElements;
+  if (sharedElements?.length) return sharedElements;
 
   const results = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
@@ -394,7 +402,7 @@ function PopupApp() {
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<KnowledgeMetadata | null>(null);
-  const [saveMode, setSaveMode] = useState<SaveMode>('feishu');
+  const [saveMode, setSaveMode] = useState<SaveMode>('markdown');
 
   /**
    * 提取页面内容
@@ -410,6 +418,19 @@ function PopupApp() {
       }
 
       const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: extractCurrentPageSnapshot,
+      });
+
+      const sharedSnapshot = results?.[0]?.result;
+      if (sharedSnapshot?.content) {
+        const extracted = sharedSnapshot.content;
+        setContent(extracted);
+        setMetadata(createDefaultKnowledgeMetadata(extracted));
+        return;
+      }
+
+      const fallbackResults = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: () => {
           const getMetaContent = (name: string, property?: string) => {
@@ -483,9 +504,9 @@ function PopupApp() {
         },
       });
 
-      if (results?.[0]?.result) {
+      if (fallbackResults?.[0]?.result) {
         const extracted = {
-          ...results[0].result,
+          ...fallbackResults[0].result,
           savedAt: new Date().toISOString(),
         };
         setContent(extracted);
@@ -580,28 +601,35 @@ function PopupApp() {
     if (!content) return;
 
     const clipMetadata = metadata || createDefaultKnowledgeMetadata(content);
+    setIsSaving(true);
+    setSaveResult(null);
     try {
-      const htmlElements = await getHtmlElementsFromActiveTab();
+      let htmlElements: HtmlElementInfo[] | undefined;
+      try {
+        htmlElements = await getHtmlElementsFromActiveTab();
+      } catch (err) {
+        console.warn('读取页面结构失败，改用文本内容生成 Markdown:', err);
+      }
       const markdown = generateMarkdown(content, htmlElements, {
         metadata: clipMetadata,
       });
       const filename = generateMarkdownFilename(content.title);
       downloadMarkdown(markdown, filename);
+      await rememberSavedContent(createSavedContentRecord({
+        content,
+        target: buildMarkdownSavedContentTarget(),
+        metadata: clipMetadata,
+      }));
+      setSaveResult({ success: true });
     } catch (err) {
       console.error('保存 Markdown 失败:', err);
-      // 降级：只使用纯文本内容
-      const markdown = generateMarkdown(content, undefined, {
-        metadata: clipMetadata,
+      setSaveResult({
+        success: false,
+        error: err instanceof Error ? err.message : 'Markdown 保存失败',
       });
-      const filename = generateMarkdownFilename(content.title);
-      downloadMarkdown(markdown, filename);
+    } finally {
+      setIsSaving(false);
     }
-
-    await rememberSavedContent(createSavedContentRecord({
-      content,
-      target: buildMarkdownSavedContentTarget(),
-      metadata: clipMetadata,
-    }));
   };
 
   /**
@@ -647,36 +675,14 @@ function PopupApp() {
   const renderTableList = () => {
     if (tables.length === 0) {
       return (
-        <div className="sf-empty-state">
-          <div className="sf-empty-icon">
-            <FolderOpen size={32} strokeWidth={1} />
-          </div>
-          <h3 className="sf-empty-title">先保存成笔记文件</h3>
-          <p className="sf-empty-desc">还没连接飞书也没关系，可以先把当前网页整理成一份 Markdown 笔记。</p>
-          <button
-            className="sf-btn sf-btn-primary sf-btn-large"
-            onClick={handleSaveAsMarkdown}
-            disabled={!content}
-          >
-            <Download size={18} strokeWidth={1.5} />
-            <span>保存到电脑</span>
-          </button>
-          <button className="sf-btn sf-btn-secondary sf-btn-large" onClick={() => openOptions()}>
-            连接飞书资料库
-          </button>
-          <button
-            className="sf-interop-card"
-            onClick={() => openOptions('interop')}
-          >
-            <span className="sf-interop-icon">
-              <ArrowLeftRight size={18} strokeWidth={1.5} />
-            </span>
-            <span className="sf-interop-copy">
-              <span className="sf-interop-title">Notion 与飞书同步</span>
-              <span className="sf-interop-desc">将一侧资料同步到另一侧</span>
-            </span>
-            <ChevronRight size={16} strokeWidth={1.5} />
-          </button>
+        <div className="sf-empty-state sf-empty-state--first-save">
+          <MarkdownFirstSaveCard
+            surface="popup"
+            isSaving={isSaving}
+            result={saveResult}
+            onSave={handleSaveAsMarkdown}
+            onSaveToFeishu={() => openOptions()}
+          />
         </div>
       );
     }

@@ -160,9 +160,9 @@ function FeishuConfigView({
         </div>
         <div className="save-mode-grid">
           {[
+            { value: 'markdown', title: '先保存到电脑', desc: '首次使用推荐，不连接飞书也能保存成 Markdown 笔记。' },
             { value: 'both', title: '飞书 + 电脑各存一份', desc: '既保存到飞书，也下载一份 Markdown 文件。' },
             { value: 'feishu', title: '只保存到飞书', desc: '适合团队一起整理和筛选资料。' },
-            { value: 'markdown', title: '只保存到电脑', desc: '不连接飞书也能先保存成 Markdown 笔记。' },
           ].map((mode) => (
             <button
               key={mode.value}
@@ -721,6 +721,7 @@ function TableConfigView({
     { value: 'status', label: '📥 整理状态', desc: '未处理、待读、精读等状态' },
     { value: 'contentType', label: '🗂️ 资料类型', desc: '阅读资料、行业研究、内容素材等类型' },
     { value: 'excerpt', label: '✂️ 摘录', desc: '选中文本或摘要' },
+    { value: 'excerptType', label: '🔖 摘录类型', desc: '观点、案例、数据、金句、问题等类型' },
     { value: 'aiField', label: '✨ AI 写入字段', desc: '保存前由 AI 信息整理后写入这一列' },
     { value: 'customFields', label: '🧩 全部自定义字段汇总', desc: '把侧栏自定义字段合并写入这一列' },
     { value: 'note', label: '💬 个人备注', desc: '剪藏时填写的备注' },
@@ -1632,7 +1633,7 @@ export default function OptionsApp() {
   const [initialRoute] = useState(() => parseOptionsHash(window.location.hash));
   const [activeView, setActiveView] = useState<ViewType>(initialRoute.view);
   const [feishuCreds, setFeishuCreds] = useState<FeishuCredentials>({ appId: '', appSecret: '' });
-  const [saveMode, setSaveModeState] = useState<SaveMode>('feishu');
+  const [saveMode, setSaveModeState] = useState<SaveMode>('markdown');
   const [tables, setTables] = useState<TableConfig[]>([]);
   const [clipFields, setClipFields] = useState<ClipFieldConfig[]>([]);
   const [aiProvider, setAiProvider] = useState<AiProviderConfig>({ ...DEFAULT_AI_PROVIDER_CONFIG });
@@ -1839,7 +1840,7 @@ export default function OptionsApp() {
               <span>问题反馈</span>
             </button>
           </div>
-          <p>Save to Feishu v0.5.5</p>
+          <p>Save to Feishu v0.5.8</p>
         </div>
       </aside>
 

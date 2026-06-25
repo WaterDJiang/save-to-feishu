@@ -1,0 +1,205 @@
+.markdown-first-save-card {
+  --first-save-accent: #1456d9;
+  --first-save-accent-soft: rgba(20, 86, 217, 0.08);
+  --first-save-text: #1f2328;
+  --first-save-muted: #667085;
+  --first-save-line: rgba(20, 86, 217, 0.18);
+  position: relative;
+  width: min(100%, 360px);
+  overflow: hidden;
+  padding: 15px;
+  color: var(--first-save-text);
+  background:
+    linear-gradient(128deg, var(--first-save-accent-soft), transparent 58%),
+    #fff;
+  border: 1px solid var(--first-save-line);
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(20, 86, 217, 0.05);
+}
+
+.markdown-first-save-card::after {
+  position: absolute;
+  top: -42px;
+  right: -28px;
+  width: 112px;
+  height: 112px;
+  border: 1px solid var(--first-save-line);
+  border-radius: 50%;
+  content: '';
+  pointer-events: none;
+}
+
+.markdown-first-save-card--popup {
+  --first-save-accent: var(--sf-primary);
+  --first-save-accent-soft: var(--sf-primary-light);
+  --first-save-text: var(--sf-text);
+  --first-save-muted: var(--sf-text-secondary);
+  --first-save-line: var(--sf-separator-strong);
+}
+
+.markdown-first-save-card__eyebrow {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 9px;
+  color: var(--first-save-accent);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.markdown-first-save-card__heading {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.markdown-first-save-card__icon {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--first-save-accent);
+  background: var(--first-save-accent-soft);
+  border: 1px solid var(--first-save-line);
+  border-radius: 11px;
+}
+
+.markdown-first-save-card h2 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.markdown-first-save-card p {
+  max-width: 270px;
+  margin: 3px 0 0;
+  color: var(--first-save-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.markdown-first-save-card__choices {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 12px;
+}
+
+.markdown-first-save-card__choice {
+  width: 100%;
+  min-width: 0;
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 15px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  color: var(--first-save-text);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--first-save-line);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.markdown-first-save-card__choice:hover:not(:disabled) {
+  background: var(--first-save-accent-soft);
+  border-color: var(--first-save-accent);
+  transform: translateY(-1px);
+}
+
+.markdown-first-save-card__choice:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.markdown-first-save-card__choice-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+}
+
+.markdown-first-save-card__choice-icon--feishu {
+  color: var(--first-save-accent);
+  background: var(--first-save-accent-soft);
+}
+
+.markdown-first-save-card__choice-icon--markdown {
+  color: #17643a;
+  background: rgba(31, 143, 77, 0.1);
+}
+
+.markdown-first-save-card__choice-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.markdown-first-save-card__choice-copy strong {
+  overflow: hidden;
+  color: var(--first-save-text);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-first-save-card__choice-copy small {
+  overflow: hidden;
+  color: var(--first-save-muted);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-first-save-card__result {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -3px 0 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.markdown-first-save-card__result.is-success {
+  color: #17643a;
+  background: rgba(31, 143, 77, 0.08);
+}
+
+.markdown-first-save-card__result.is-error {
+  color: #b42318;
+  background: rgba(217, 45, 32, 0.08);
+}
+
+.markdown-first-save-card__spin {
+  animation: markdown-first-save-spin 1s linear infinite;
+}
+
+@keyframes markdown-first-save-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 360px) {
+  .markdown-first-save-card__choice-copy small {
+    white-space: normal;
+  }
+}
